@@ -2,17 +2,19 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 
-from . import auth, db, security
+from . import auth, db, security, sms
 from .auth import CurrentUser, get_current_user, require_admin
 from .catalog import CATALOG, PACKS, PLANS
 from .runner import submit
 from .schemas import (
+    BindPhoneIn,
     LoginIn,
     ModelRouteIn,
     MyProviderIn,
@@ -22,6 +24,7 @@ from .schemas import (
     ProviderIn,
     ROLES,
     RegisterIn,
+    SmsSendIn,
     UserPatchIn,
 )
 
@@ -52,25 +55,71 @@ def _public_user(u: CurrentUser) -> dict:
         "extra_chapters": u["extra_chapters"],
         "remaining_chapters": plan_month + u["extra_chapters"],
         "byok": _has_byok(u["id"]),
+        "phone": u.get("phone"),
+        "email": u.get("email"),
     }
+
+
+@router.post("/auth/sms/send")
+def send_sms_code(body: SmsSendIn):
+    """发送短信验证码（注册/绑号）。mock 通道下验证码回显在响应里便于联调。"""
+    if not auth.is_phone(body.phone):
+        raise HTTPException(400, "手机号格式不正确")
+    if body.scene == "register" and db.q_one("SELECT id FROM users WHERE phone=?", (body.phone,)):
+        raise HTTPException(409, "该手机号已注册，请直接登录")
+    try:
+        sms.check_send_allowed(body.phone)
+    except sms.SmsError as e:
+        raise HTTPException(429, str(e))
+    code = sms.generate_code()
+    expires = db.q_one("SELECT datetime('now','localtime','+5 minutes') AS t")["t"]
+    db.execute(
+        "UPDATE sms_codes SET used=1 WHERE phone=? AND scene=? AND used=0",
+        (body.phone, body.scene),
+    )  # 旧码作废
+    db.execute(
+        "INSERT INTO sms_codes(phone,scene,code_hash,expires_at) VALUES(?,?,?,?)",
+        (body.phone, body.scene, sms.code_hash(code), expires),
+    )
+    try:
+        sms.send_code(body.phone, code)
+    except sms.SmsError as e:
+        raise HTTPException(400, str(e))
+    sms.mark_sent(body.phone)
+    result: dict = {"ok": True, "expires_in": 300}
+    if sms.PROVIDER == "mock":
+        result["mock_code"] = code  # 仅开发模式回显，生产配置 SMS_PROVIDER=aliyun 后消失
+    return result
 
 
 @router.post("/auth/register")
 def register(body: RegisterIn):
-    uid = auth.create_user(body.username, body.password)
-    token = auth.login(body.username, body.password)
+    """手机号 + 短信验证码注册（邮箱选填，填写即绑定）。"""
+    try:
+        uid = auth.register_with_phone(body.phone, body.code, body.password,
+                                       email=body.email, penname=body.penname)
+    except sqlite3.IntegrityError:
+        raise HTTPException(409, "用户名已存在")
+    token = auth.login(body.phone, body.password)
     user = CurrentUser(dict(db.q_one("SELECT * FROM users WHERE id=?", (uid,))))
     return {"token": token, "user": _public_user(user)}
 
 
 @router.post("/auth/login")
 def login(body: LoginIn):
-    token = auth.login(body.username, body.password)
+    token = auth.login(body.account, body.password)
     row = db.q_one(
         "SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token=?",
         (token,),
     )
     return {"token": token, "user": _public_user(CurrentUser(dict(row)))}
+
+
+@router.post("/auth/bind-phone")
+def bind_phone(body: BindPhoneIn, user: CurrentUser = Depends(get_current_user)):
+    """存量账号补绑手机号（邮箱登录的前提）。"""
+    auth.bind_phone(user["id"], body.phone, body.code)
+    return _public_user(CurrentUser(dict(db.q_one("SELECT * FROM users WHERE id=?", (user["id"],)))))
 
 
 @router.get("/auth/me")

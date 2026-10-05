@@ -10,13 +10,26 @@ ROLES = ("planner", "writer", "critic", "reviser", "summarizer", "judge")
 
 
 class RegisterIn(BaseModel):
-    username: str
-    password: str
+    phone: str                 # 手机号（注册锚点，验证码校验）
+    code: str                  # 短信验证码
+    password: str = Field(min_length=6, max_length=64)
+    email: Optional[str] = None    # 选填，填写即绑定（邮箱登录的前提）
+    penname: Optional[str] = None  # 选填，站内显示的笔名
 
 
 class LoginIn(BaseModel):
-    username: str
+    account: str = Field(min_length=1, max_length=64)   # 手机号 / 邮箱 / 用户名
     password: str
+
+
+class SmsSendIn(BaseModel):
+    phone: str
+    scene: str = "register"    # register / bind
+
+
+class BindPhoneIn(BaseModel):
+    phone: str
+    code: str
 
 
 class ProjectCreateIn(BaseModel):

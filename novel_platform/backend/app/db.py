@@ -134,6 +134,19 @@ CREATE INDEX IF NOT EXISTS idx_usage_user ON usage_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_usage_time ON usage_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
+
+-- 短信验证码（注册/绑号），存哈希不存明文
+CREATE TABLE IF NOT EXISTS sms_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    phone TEXT NOT NULL,
+    scene TEXT NOT NULL DEFAULT 'register',   -- register / bind
+    code_hash TEXT NOT NULL,
+    expires_at TEXT NOT NULL,                 -- YYYY-MM-DD HH:MM:SS 本地时间
+    used INTEGER NOT NULL DEFAULT 0,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_sms_phone ON sms_codes(phone, scene, created_at);
 """
 
 # 老库兼容：逐列补齐（已存在则忽略）
@@ -142,6 +155,8 @@ _ENSURE_COLUMNS = [
     ("users", "plan_chapters", "INTEGER NOT NULL DEFAULT 20"),
     ("users", "plan_reset_at", "TEXT"),
     ("users", "extra_chapters", "INTEGER NOT NULL DEFAULT 0"),
+    ("users", "phone", "TEXT"),
+    ("users", "email", "TEXT"),
     ("orders", "channel", "TEXT NOT NULL DEFAULT 'mock'"),
     ("orders", "trade_no", "TEXT"),
     ("projects", "target_words", "INTEGER NOT NULL DEFAULT 3000"),
@@ -160,6 +175,16 @@ def init_db() -> None:
     with _lock, get_conn() as conn:
         conn.executescript(SCHEMA)
         _migrate(conn)
+        # 手机号/邮箱唯一索引必须在补列之后创建（老库 users 表无 phone/email 列）；
+        # 存量数据若存在重复值则不建索引，由应用层唯一性校验兜底，避免启动崩溃
+        for ddl in (
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone ON users(phone) WHERE phone IS NOT NULL",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL",
+        ):
+            try:
+                conn.execute(ddl)
+            except sqlite3.OperationalError:
+                pass
         conn.commit()
 
 

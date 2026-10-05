@@ -15,13 +15,16 @@ export interface User {
   extra_chapters: number;
   remaining_chapters: number;
   byok: boolean;
+  phone: string | null;
+  email: string | null;
 }
 
 interface AuthCtx {
   user: User | null;
   loading: boolean;
-  login: (username: string, password: string) => Promise<void>;
-  register: (username: string, password: string) => Promise<void>;
+  login: (account: string, password: string) => Promise<void>;
+  register: (phone: string, code: string, password: string, email?: string, penname?: string) => Promise<void>;
+  sendSms: (phone: string, scene?: string) => Promise<{ mock_code?: string }>;
   logout: () => void;
   refresh: () => Promise<void>;
 }
@@ -52,22 +55,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refresh();
   }, []);
 
-  const login = async (username: string, password: string) => {
+  const login = async (account: string, password: string) => {
     const r = await api<{ token: string; user: User }>("POST", "/api/auth/login", {
-      username,
+      account,
       password,
     });
     setToken(r.token);
     setUser(r.user);
   };
 
-  const register = async (username: string, password: string) => {
+  const register = async (phone: string, code: string, password: string, email?: string, penname?: string) => {
     const r = await api<{ token: string; user: User }>("POST", "/api/auth/register", {
-      username,
+      phone,
+      code,
       password,
+      email,
+      penname,
     });
     setToken(r.token);
     setUser(r.user);
+  };
+
+  const sendSms = async (phone: string, scene: string = "register") => {
+    return api<{ mock_code?: string }>("POST", "/api/auth/sms/send", { phone, scene });
   };
 
   const logout = () => {
@@ -76,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <Ctx.Provider value={{ user, loading, login, register, logout, refresh }}>
+    <Ctx.Provider value={{ user, loading, login, register, sendSms, logout, refresh }}>
       {children}
     </Ctx.Provider>
   );

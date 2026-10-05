@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BookOpenText, Feather, Workflow, Loader2 } from "lucide-react";
+import { BookOpenText, Feather, Workflow, Loader2, MessageSquareText } from "lucide-react";
 
 const FEATURES = [
   { icon: Feather, title: "一句灵感，整书成稿", desc: "AI 自动完成世界观、大纲与逐章写作" },
@@ -13,28 +13,76 @@ const FEATURES = [
   { icon: BookOpenText, title: "Markdown 导出", desc: "成书一键导出，直接连载或投稿" },
 ];
 
+const PHONE_RE = /^1[3-9]\d{9}$/;
+
 export default function LoginPage() {
-  const { login, register } = useAuth();
+  const { login, register, sendSms } = useAuth();
   const nav = useNavigate();
-  const [username, setUsername] = useState("");
+  const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
+  // 注册表单
+  const [regPhone, setRegPhone] = useState("");
+  const [regCode, setRegCode] = useState("");
+  const [regPass, setRegPass] = useState("");
+  const [regEmail, setRegEmail] = useState("");
+  const [regPenname, setRegPenname] = useState("");
+  const [mockCode, setMockCode] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState(0);
+  const [smsBusy, setSmsBusy] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // 发送验证码 60 秒倒计时
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [countdown]);
+
+  const sendCode = async () => {
+    setError("");
+    const phone = regPhone.trim();
+    if (!PHONE_RE.test(phone)) return setError("请输入正确的 11 位手机号");
+    setSmsBusy(true);
+    try {
+      const r = await sendSms(phone, "register");
+      setCountdown(60);
+      setMockCode(r.mock_code ?? null);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setSmsBusy(false);
+    }
+  };
+
   const submit = async (mode: "login" | "register") => {
     setError("");
-    // 客户端校验（inline error，不用 alert）
-    const name = username.trim();
-    if (!name) return setError("请输入用户名");
-    if (mode === "register" && (name.length < 3 || name.length > 32))
-      return setError("用户名需为 3-32 位");
-    if (!password) return setError("请输入密码");
-    if (mode === "register" && password.length < 6)
-      return setError("密码至少 6 位");
+    if (mode === "login") {
+      if (!account.trim()) return setError("请输入手机号、邮箱或用户名");
+      if (!password) return setError("请输入密码");
+      setBusy(true);
+      try {
+        await login(account.trim(), password);
+        nav("/");
+      } catch (e: any) {
+        setError(e.message);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    // 注册：手机号 + 短信验证码
+    const phone = regPhone.trim();
+    const code = regCode.trim();
+    if (!PHONE_RE.test(phone)) return setError("请输入正确的 11 位手机号");
+    if (!/^\d{6}$/.test(code)) return setError("请输入 6 位短信验证码");
+    if (regPass.length < 6) return setError("密码至少 6 位");
+    if (regEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regEmail.trim()))
+      return setError("邮箱格式不正确（也可留空）");
+    if (regPenname && regPenname.trim().length > 32) return setError("笔名不超过 32 字");
     setBusy(true);
     try {
-      if (mode === "login") await login(name, password);
-      else await register(name, password);
+      await register(phone, code, regPass, regEmail.trim() || undefined, regPenname.trim() || undefined);
       nav("/");
     } catch (e: any) {
       setError(e.message);
@@ -141,12 +189,13 @@ export default function LoginPage() {
 
               <TabsContent value="login" className="space-y-5 mt-6">
                 <div className="space-y-2">
-                  <Label htmlFor="login-user">用户名</Label>
+                  <Label htmlFor="login-user">手机号 / 邮箱 / 用户名</Label>
                   <Input
                     id="login-user"
                     autoComplete="username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="已绑定手机号的邮箱也可以直接登录"
+                    value={account}
+                    onChange={(e) => setAccount(e.target.value)}
                     className="bg-zinc-950/80 border-zinc-800 focus-visible:ring-amber-500/40 h-11"
                   />
                 </div>
@@ -178,27 +227,83 @@ export default function LoginPage() {
 
               <TabsContent value="register" className="space-y-5 mt-6">
                 <div className="space-y-2">
-                  <Label htmlFor="reg-user">用户名</Label>
+                  <Label htmlFor="reg-phone">手机号</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="reg-phone"
+                      inputMode="numeric"
+                      maxLength={11}
+                      autoComplete="tel"
+                      placeholder="11 位手机号"
+                      value={regPhone}
+                      onChange={(e) => setRegPhone(e.target.value.replace(/\D/g, ""))}
+                      className="bg-zinc-950/80 border-zinc-800 focus-visible:ring-amber-500/40 h-11 flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={smsBusy || countdown > 0}
+                      onClick={sendCode}
+                      className="h-11 px-4 shrink-0 border-zinc-700 text-zinc-200 hover:bg-zinc-800 hover:text-zinc-100"
+                    >
+                      {smsBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : countdown > 0 ? `${countdown}s` : "获取验证码"}
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="reg-code">短信验证码</Label>
                   <Input
-                    id="reg-user"
-                    autoComplete="username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    id="reg-code"
+                    inputMode="numeric"
+                    maxLength={6}
+                    autoComplete="one-time-code"
+                    placeholder="6 位验证码"
+                    value={regCode}
+                    onChange={(e) => setRegCode(e.target.value.replace(/\D/g, ""))}
                     className="bg-zinc-950/80 border-zinc-800 focus-visible:ring-amber-500/40 h-11"
                   />
-                  <p className="text-xs text-zinc-600">3-32 位，将作为你的笔名显示</p>
                 </div>
+                {mockCode && (
+                  <p className="text-sm text-amber-200/90 border border-amber-600/40 bg-amber-500/10 rounded-lg px-3 py-2 flex items-center gap-2">
+                    <MessageSquareText className="w-4 h-4 shrink-0" />
+                    短信通道开发模式 · 本次验证码：{mockCode}
+                  </p>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="reg-pass">密码</Label>
                   <Input
                     id="reg-pass"
                     type="password"
                     autoComplete="new-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    value={regPass}
+                    onChange={(e) => setRegPass(e.target.value)}
                     className="bg-zinc-950/80 border-zinc-800 focus-visible:ring-amber-500/40 h-11"
                   />
                   <p className="text-xs text-zinc-600">至少 6 位，建议混合字母与数字</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="reg-email">邮箱（选填）</Label>
+                    <Input
+                      id="reg-email"
+                      type="email"
+                      autoComplete="email"
+                      placeholder="可用于邮箱登录"
+                      value={regEmail}
+                      onChange={(e) => setRegEmail(e.target.value)}
+                      className="bg-zinc-950/80 border-zinc-800 focus-visible:ring-amber-500/40 h-11"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="reg-penname">笔名（选填）</Label>
+                    <Input
+                      id="reg-penname"
+                      placeholder="默认自动生成"
+                      value={regPenname}
+                      onChange={(e) => setRegPenname(e.target.value)}
+                      className="bg-zinc-950/80 border-zinc-800 focus-visible:ring-amber-500/40 h-11"
+                    />
+                  </div>
                 </div>
                 {error && (
                   <p className="text-sm text-red-400 border border-red-900/50 bg-red-950/40 rounded-lg px-3 py-2">
