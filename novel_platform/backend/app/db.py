@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import contextlib
 import sqlite3
 import threading
 from pathlib import Path
@@ -180,8 +181,24 @@ def _migrate(conn: sqlite3.Connection) -> None:
             pass
 
 
+@contextlib.contextmanager
+def _session() -> "contextlib.AbstractContextManager[sqlite3.Connection]":
+    """加锁获取连接并在退出时真正关闭。
+
+    sqlite3 连接对象的 with 语句只管理事务、不关闭连接；此前每个查询都泄漏一个
+    文件描述符，长跑进程会在数小时内撞 ulimit -n（1024），报
+    "unable to open database file"（EMFILE）。
+    """
+    with _lock:
+        conn = get_conn()
+        try:
+            yield conn
+        finally:
+            conn.close()
+
+
 def init_db() -> None:
-    with _lock, get_conn() as conn:
+    with _session() as conn:
         conn.executescript(SCHEMA)
         _migrate(conn)
         # 手机号/邮箱唯一索引必须在补列之后创建（老库 users 表无 phone/email 列）；
@@ -198,7 +215,7 @@ def init_db() -> None:
 
 
 def q(sql: str, params: tuple = ()) -> list[sqlite3.Row]:
-    with _lock, get_conn() as conn:
+    with _session() as conn:
         return conn.execute(sql, params).fetchall()
 
 
@@ -208,7 +225,7 @@ def q_one(sql: str, params: tuple = ()) -> sqlite3.Row | None:
 
 
 def execute(sql: str, params: tuple = ()) -> int:
-    with _lock, get_conn() as conn:
+    with _session() as conn:
         cur = conn.execute(sql, params)
         conn.commit()
         return cur.lastrowid
@@ -216,7 +233,7 @@ def execute(sql: str, params: tuple = ()) -> int:
 
 def execute_rowcount(sql: str, params: tuple = ()) -> int:
     """返回受影响行数，用于条件更新（如内测码核销）的并发安全判断。"""
-    with _lock, get_conn() as conn:
+    with _session() as conn:
         cur = conn.execute(sql, params)
         conn.commit()
         return cur.rowcount
