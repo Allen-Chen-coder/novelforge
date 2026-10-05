@@ -1,7 +1,8 @@
 """认证：PBKDF2 密码散列 + Token 会话。管理员账号首次启动时自动创建。
 
 登录账号体系：手机号 / 邮箱 / 兼容旧用户名。
-注册走「手机号 + 短信验证码 + 密码」，邮箱选填——保证邮箱登录必绑手机号。
+注册走「手机号 + 短信验证码 + 内测码 + 密码」，邮箱选填——保证邮箱登录必绑手机号。
+内测码为唯一 6 位数字，注册成功后一次性核销（注册失败不占码）。
 """
 from __future__ import annotations
 
@@ -22,6 +23,7 @@ ADMIN_PASSWORD = os.environ.get("NOVEL_ADMIN_PASSWORD", "admin123")
 DEFAULT_USER_QUOTA = int(os.environ.get("NOVEL_DEFAULT_QUOTA", "100"))
 
 PHONE_RE = re.compile(r"^1[3-9]\d{9}$")
+INVITE_RE = re.compile(r"^\d{6}$")
 
 
 def is_phone(s: str) -> bool:
@@ -201,3 +203,27 @@ def require_admin(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
     if not user.is_admin:
         raise HTTPException(403, "需要管理员权限")
     return user
+
+
+# --------------------------------------------------------------------- #
+# 内测码：注册门槛，唯一 6 位数字，一次性
+# --------------------------------------------------------------------- #
+def validate_invite(code: str) -> str:
+    """注册前校验内测码存在（不核销，注册成功后才核销）。"""
+    code = (code or "").strip()
+    if not INVITE_RE.match(code):
+        raise HTTPException(400, "内测码为 6 位数字")
+    if not db.q_one("SELECT code FROM invite_codes WHERE code=?", (code,)):
+        raise HTTPException(400, "内测码不正确")
+    return code
+
+
+def consume_invite(code: str, user_id: int) -> None:
+    """注册成功后核销内测码。条件更新保证并发下只核销一次。"""
+    n = db.execute_rowcount(
+        "UPDATE invite_codes SET used_by=?, used_at=datetime('now','localtime') "
+        "WHERE code=? AND used_by IS NULL",
+        (user_id, code.strip()),
+    )
+    if n == 0:
+        raise HTTPException(400, "内测码已被使用")

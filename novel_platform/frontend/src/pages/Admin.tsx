@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
-import { ArrowLeft, KeyRound, Users, BarChart3, Save, Receipt, Ban, Network } from "lucide-react";
+import { ArrowLeft, KeyRound, Users, BarChart3, Save, Receipt, Ban, Network, Ticket } from "lucide-react";
 
 interface ProviderCfg {
   configured: boolean;
@@ -125,6 +125,142 @@ function RouteRow({ route, onSaved }: { route: ModelRoute; onSaved: () => void }
   );
 }
 
+interface InviteCode {
+  code: string;
+  used: boolean;
+  used_by_name: string | null;
+  used_by_phone: string | null;
+  used_at: string | null;
+  created_at: string;
+}
+
+function InvitePanel() {
+  const [invites, setInvites] = useState<InviteCode[]>([]);
+  const [count, setCount] = useState(5);
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const load = async () => setInvites(await api<InviteCode[]>("GET", "/api/admin/invites"));
+
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 10000);
+    return () => clearInterval(t);
+  }, []);
+
+  const generate = async () => {
+    setMsg("");
+    setBusy(true);
+    try {
+      const r = await api<{ codes: string[] }>("POST", "/api/admin/invites", { count });
+      setMsg(`已生成 ${r.codes.length} 个内测码：${r.codes.join("  ")}`);
+      await load();
+    } catch (e: any) {
+      setMsg(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copy = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(code);
+      setTimeout(() => setCopied((c) => (c === code ? null : c)), 1500);
+    } catch {
+      setMsg("复制失败，请手动选择复制");
+    }
+  };
+
+  const remove = async (code: string) => {
+    setMsg("");
+    try {
+      await api("DELETE", `/api/admin/invites/${code}`);
+      await load();
+    } catch (e: any) {
+      setMsg(e.message);
+    }
+  };
+
+  const unused = invites.filter((i) => !i.used).length;
+
+  return (
+    <Card className="bg-zinc-900/60 border-zinc-800">
+      <CardHeader>
+        <CardTitle>内测码管理</CardTitle>
+        <CardDescription className="text-zinc-400">
+          内测期注册门槛：用户注册必须持有效 6 位内测码，一码一人、注册即作废。
+          共 {invites.length} 个码，未使用 {unused} 个。把码发给受邀用户即可。
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-end gap-3">
+          <div className="space-y-2">
+            <Label>生成数量</Label>
+            <Input
+              type="number"
+              min={1}
+              max={200}
+              value={count}
+              onChange={(e) => setCount(Math.max(1, Math.min(200, Number(e.target.value) || 1)))}
+              className="w-28 bg-zinc-950 border-zinc-700 h-9"
+            />
+          </div>
+          <Button className="bg-amber-500 text-zinc-950 hover:bg-amber-400" disabled={busy} onClick={generate}>
+            <Ticket className="w-4 h-4 mr-1" />{busy ? "生成中…" : "生成内测码"}
+          </Button>
+        </div>
+        {msg && <p className="text-sm text-amber-300">{msg}</p>}
+        <Table>
+          <TableHeader>
+            <TableRow className="border-zinc-800">
+              <TableHead>内测码</TableHead><TableHead>状态</TableHead><TableHead>使用人</TableHead>
+              <TableHead>使用时间</TableHead><TableHead>创建时间</TableHead><TableHead className="text-right">操作</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {invites.map((i) => (
+              <TableRow key={i.code} className="border-zinc-800">
+                <TableCell>
+                  <code className="text-amber-300 tracking-widest">{i.code}</code>
+                </TableCell>
+                <TableCell>
+                  {i.used
+                    ? <Badge variant="secondary" className="bg-zinc-700">已使用</Badge>
+                    : <Badge className="bg-emerald-600">未使用</Badge>}
+                </TableCell>
+                <TableCell className="text-zinc-400">
+                  {i.used ? `${i.used_by_name || "—"}${i.used_by_phone ? `（${i.used_by_phone}）` : ""}` : "—"}
+                </TableCell>
+                <TableCell className="text-zinc-500 tnum">{i.used_at || "—"}</TableCell>
+                <TableCell className="text-zinc-500 tnum">{i.created_at}</TableCell>
+                <TableCell className="text-right space-x-2">
+                  {!i.used && (
+                    <>
+                      <Button size="sm" variant="outline" className="h-7 border-zinc-700 text-zinc-300 hover:bg-zinc-800" onClick={() => copy(i.code)}>
+                        {copied === i.code ? "已复制" : "复制"}
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-7 border-red-900/60 text-red-400 hover:bg-red-950/50" onClick={() => remove(i.code)}>
+                        <Ban className="w-3 h-3 mr-1" />删除
+                      </Button>
+                    </>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+            {invites.length === 0 && (
+              <TableRow className="border-zinc-800">
+                <TableCell colSpan={6} className="text-center text-zinc-500 py-8">还没有内测码，点击上方「生成内测码」创建第一批</TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function AdminPage() {
   const [provider, setProvider] = useState<ProviderCfg | null>(null);
   const [form, setForm] = useState({ base_url: "https://api.moonshot.cn/v1", api_key: "", model: "kimi-k3", temperature: 0.8, max_tokens: 8192 });
@@ -198,6 +334,7 @@ export default function AdminPage() {
             <TabsTrigger value="provider"><KeyRound className="w-4 h-4 mr-1" />服务商配置</TabsTrigger>
             <TabsTrigger value="routes"><Network className="w-4 h-4 mr-1" />模型路由</TabsTrigger>
             <TabsTrigger value="users"><Users className="w-4 h-4 mr-1" />用户管理</TabsTrigger>
+            <TabsTrigger value="invites"><Ticket className="w-4 h-4 mr-1" />内测码</TabsTrigger>
             <TabsTrigger value="orders"><Receipt className="w-4 h-4 mr-1" />订单管理</TabsTrigger>
             <TabsTrigger value="usage"><BarChart3 className="w-4 h-4 mr-1" />用量监控</TabsTrigger>
           </TabsList>
@@ -314,6 +451,11 @@ export default function AdminPage() {
                 </Table>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* ---------- 内测码 ---------- */}
+          <TabsContent value="invites" className="mt-6">
+            <InvitePanel />
           </TabsContent>
 
           {/* ---------- 订单管理 ---------- */}

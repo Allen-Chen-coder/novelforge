@@ -147,6 +147,15 @@ CREATE TABLE IF NOT EXISTS sms_codes (
     created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
 CREATE INDEX IF NOT EXISTS idx_sms_phone ON sms_codes(phone, scene, created_at);
+
+-- 内测码：注册门槛，唯一 6 位数字，一次性核销
+CREATE TABLE IF NOT EXISTS invite_codes (
+    code TEXT PRIMARY KEY,
+    used_by INTEGER,
+    used_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_invite_used ON invite_codes(used_by);
 """
 
 # 老库兼容：逐列补齐（已存在则忽略）
@@ -203,3 +212,11 @@ def execute(sql: str, params: tuple = ()) -> int:
         cur = conn.execute(sql, params)
         conn.commit()
         return cur.lastrowid
+
+
+def execute_rowcount(sql: str, params: tuple = ()) -> int:
+    """返回受影响行数，用于条件更新（如内测码核销）的并发安全判断。"""
+    with _lock, get_conn() as conn:
+        cur = conn.execute(sql, params)
+        conn.commit()
+        return cur.rowcount

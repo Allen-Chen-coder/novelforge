@@ -12,6 +12,7 @@ ROLES = ("planner", "writer", "critic", "reviser", "summarizer", "judge")
 class RegisterIn(BaseModel):
     phone: str                 # 手机号（注册锚点，验证码校验）
     code: str                  # 短信验证码
+    invite: str = Field(min_length=6, max_length=6)   # 内测码（唯一 6 位，注册成功后核销）
     password: str = Field(min_length=6, max_length=64)
     email: Optional[str] = None    # 选填，填写即绑定（邮箱登录的前提）
     penname: Optional[str] = None  # 选填，站内显示的笔名
@@ -30,6 +31,10 @@ class SmsSendIn(BaseModel):
 class BindPhoneIn(BaseModel):
     phone: str
     code: str
+
+
+class InviteCreateIn(BaseModel):
+    count: int = Field(default=1, ge=1, le=200)   # 一次最多生成 200 个
 
 
 class ProjectCreateIn(BaseModel):

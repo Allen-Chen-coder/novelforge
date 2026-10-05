@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import secrets
 import sqlite3
 from typing import Optional
 
@@ -15,6 +16,7 @@ from .catalog import CATALOG, PACKS, PLANS
 from .runner import submit
 from .schemas import (
     BindPhoneIn,
+    InviteCreateIn,
     LoginIn,
     ModelRouteIn,
     MyProviderIn,
@@ -94,12 +96,14 @@ def send_sms_code(body: SmsSendIn):
 
 @router.post("/auth/register")
 def register(body: RegisterIn):
-    """手机号 + 短信验证码注册（邮箱选填，填写即绑定）。"""
+    """手机号 + 短信验证码 + 内测码注册（邮箱选填，填写即绑定）。内测码注册成功后核销。"""
+    auth.validate_invite(body.invite)  # 先校验存在；失败不占码
     try:
         uid = auth.register_with_phone(body.phone, body.code, body.password,
                                        email=body.email, penname=body.penname)
     except sqlite3.IntegrityError:
         raise HTTPException(409, "用户名已存在")
+    auth.consume_invite(body.invite, uid)  # 注册成功才核销；并发下只成功一次
     token = auth.login(body.phone, body.password)
     user = CurrentUser(dict(db.q_one("SELECT * FROM users WHERE id=?", (uid,))))
     return {"token": token, "user": _public_user(user)}
@@ -684,6 +688,56 @@ def put_model_route(body: ModelRouteIn, admin: CurrentUser = Depends(require_adm
 @router.delete("/admin/model-routes/{role}")
 def delete_model_route(role: str, admin: CurrentUser = Depends(require_admin)):
     db.execute("DELETE FROM model_routes WHERE role=?", (role,))
+    return {"ok": True}
+
+
+# ----- 内测码管理 ----- #
+@router.get("/admin/invites")
+def list_invites(admin: CurrentUser = Depends(require_admin)):
+    rows = db.q(
+        """SELECT i.code, i.used_by, i.used_at, i.created_at, u.username AS used_by_name, u.phone AS used_by_phone
+           FROM invite_codes i LEFT JOIN users u ON u.id=i.used_by
+           ORDER BY (i.used_by IS NOT NULL), i.created_at DESC, i.code LIMIT 500"""
+    )
+    return [
+        {
+            "code": r["code"],
+            "used": r["used_by"] is not None,
+            "used_by_name": r["used_by_name"],
+            "used_by_phone": r["used_by_phone"],
+            "used_at": r["used_at"],
+            "created_at": r["created_at"],
+        }
+        for r in rows
+    ]
+
+
+@router.post("/admin/invites")
+def create_invites(body: InviteCreateIn, admin: CurrentUser = Depends(require_admin)):
+    """批量生成唯一 6 位数字内测码（避开已存在的码）。"""
+    codes: list[str] = []
+    tries = 0
+    while len(codes) < body.count and tries < body.count * 50:
+        tries += 1
+        c = f"{secrets.randbelow(1_000_000):06d}"
+        if c in codes:
+            continue
+        if db.q_one("SELECT code FROM invite_codes WHERE code=?", (c,)):
+            continue
+        codes.append(c)
+    if len(codes) < body.count:
+        raise HTTPException(500, "内测码空间不足或生成冲突过多，请减少单次生成数量")
+    for c in codes:
+        db.execute("INSERT INTO invite_codes(code) VALUES(?)", (c,))
+    return {"codes": codes}
+
+
+@router.delete("/admin/invites/{code}")
+def delete_invite(code: str, admin: CurrentUser = Depends(require_admin)):
+    """删除未使用的内测码；已使用的码不可删除（留痕）。"""
+    n = db.execute_rowcount("DELETE FROM invite_codes WHERE code=? AND used_by IS NULL", (code,))
+    if n == 0:
+        raise HTTPException(400, "内测码不存在或已被使用，不可删除")
     return {"ok": True}
 
 

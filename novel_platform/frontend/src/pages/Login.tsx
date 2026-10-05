@@ -23,6 +23,7 @@ export default function LoginPage() {
   // 注册表单
   const [regPhone, setRegPhone] = useState("");
   const [regCode, setRegCode] = useState("");
+  const [regInvite, setRegInvite] = useState("");
   const [regPass, setRegPass] = useState("");
   const [regEmail, setRegEmail] = useState("");
   const [regPenname, setRegPenname] = useState("");
@@ -76,13 +77,14 @@ export default function LoginPage() {
     const code = regCode.trim();
     if (!PHONE_RE.test(phone)) return setError("请输入正确的 11 位手机号");
     if (!/^\d{6}$/.test(code)) return setError("请输入 6 位短信验证码");
+    if (!/^\d{6}$/.test(regInvite.trim())) return setError("请输入 6 位数字内测码");
     if (regPass.length < 6) return setError("密码至少 6 位");
     if (regEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regEmail.trim()))
       return setError("邮箱格式不正确（也可留空）");
     if (regPenname && regPenname.trim().length > 32) return setError("笔名不超过 32 字");
     setBusy(true);
     try {
-      await register(phone, code, regPass, regEmail.trim() || undefined, regPenname.trim() || undefined);
+      await register(phone, code, regInvite.trim(), regPass, regEmail.trim() || undefined, regPenname.trim() || undefined);
       nav("/");
     } catch (e: any) {
       setError(e.message);
@@ -262,6 +264,19 @@ export default function LoginPage() {
                     onChange={(e) => setRegCode(e.target.value.replace(/\D/g, ""))}
                     className="bg-zinc-950/80 border-zinc-800 focus-visible:ring-amber-500/40 h-11"
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="reg-invite">内测码</Label>
+                  <Input
+                    id="reg-invite"
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="6 位数字内测码（向管理员索取）"
+                    value={regInvite}
+                    onChange={(e) => setRegInvite(e.target.value.replace(/\D/g, ""))}
+                    className="bg-zinc-950/80 border-zinc-800 focus-visible:ring-amber-500/40 h-11"
+                  />
+                  <p className="text-xs text-zinc-600">平台内测期仅限受邀用户注册，一码一人，注册后即刻作废</p>
                 </div>
                 {mockCode && (
                   <p className="text-sm text-amber-200/90 border border-amber-600/40 bg-amber-500/10 rounded-lg px-3 py-2 flex items-center gap-2">
