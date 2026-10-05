@@ -1,0 +1,20 @@
+# 小说生成 Agent 配置
+# 所有密钥走环境变量（见 .env.example），不要写死在本文件。
+
+provider:
+  # OpenAI 兼容接口。默认 Kimi 开放平台，可换成 DeepSeek / 通义 / SiliconFlow 等
+  base_url: "https://api.moonshot.cn/v1"
+  api_key_env: "MOONSHOT_API_KEY"   # 环境变量名
+  model: "kimi-k3"                  # 写作模型；长上下文适合长篇小说
+  temperature: 0.8
+  max_tokens: 8192
+  request_timeout: 300
+
+pipeline:
+  target_chapters: 10          # 本次目标章节数（可在命令行覆盖）
+  max_revise_rounds: 2         # 每章最大审校-修订轮数
+  rolling_summary_chapters: 5  # 章节上下文携带的滚动摘要数量
+  checkpoint_every: 1          # 每写完 N 章落一次盘（断点续跑）
+  project_dir: "projects"      # 作品工程目录（相对本配置文件所在目录）
+  style_notes: ""              # 可选：全书统一的文风要求，如“短句、口语化、男频爽文节奏”
+  genre: "男频都市爽文"         # 可选：题材默认值，命令行可覆盖

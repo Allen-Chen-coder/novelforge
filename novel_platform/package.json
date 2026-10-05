@@ -1,0 +1,13 @@
+{
+  "name": "novelforge",
+  "private": true,
+  "version": "0.1.0",
+  "description": "墨卷 NovelForge — AI 长篇小说生成平台（根目录中转，实际工程在 frontend/）",
+  "scripts": {
+    "dev": "npm --prefix frontend run dev --",
+    "dev:vite": "npm --prefix frontend run dev:vite --",
+    "build": "npm --prefix frontend run build --",
+    "lint": "npm --prefix frontend run lint --",
+    "preview": "npm --prefix frontend run preview --"
+  }
+}

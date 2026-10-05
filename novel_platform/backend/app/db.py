@@ -1,0 +1,180 @@
+"""SQLite 持久化层（线程安全）。
+
+表：users / sessions / provider_config / projects / chapters / usage_logs
+"""
+from __future__ import annotations
+
+import sqlite3
+import threading
+from pathlib import Path
+
+DB_PATH = Path(__file__).resolve().parents[1] / "data" / "platform.db"
+_lock = threading.RLock()
+
+
+def get_conn() -> sqlite3.Connection:
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=ON")
+    return conn
+
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    is_admin INTEGER NOT NULL DEFAULT 0,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    quota_chapters INTEGER NOT NULL DEFAULT 100,   -- 历史遗留字段，新逻辑用 plan/extra_chapters
+    used_chapters INTEGER NOT NULL DEFAULT 0,
+    plan TEXT NOT NULL DEFAULT 'free',
+    plan_chapters INTEGER NOT NULL DEFAULT 20,
+    plan_reset_at TEXT,                            -- 下次额度重置日期 YYYY-MM-DD
+    extra_chapters INTEGER NOT NULL DEFAULT 0,     -- 加油包/管理员手动叠加，永不过期
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,                 -- 'plan' 订阅 / 'pack' 加油包
+    product_code TEXT NOT NULL,
+    title TEXT NOT NULL,
+    amount_cents INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',  -- pending/paid/cancelled
+    months INTEGER NOT NULL DEFAULT 1,
+    chapters INTEGER NOT NULL DEFAULT 0,
+    channel TEXT NOT NULL DEFAULT 'mock',   -- mock/wechat/alipay
+    trade_no TEXT,                          -- 第三方支付单号（对账用）
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    paid_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS user_provider (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    base_url TEXT NOT NULL,
+    api_key_enc TEXT NOT NULL,          -- Fernet 加密后的用户自有 Key
+    model TEXT NOT NULL,
+    temperature REAL NOT NULL DEFAULT 0.8,
+    max_tokens INTEGER NOT NULL DEFAULT 8192,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    token TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS provider_config (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    base_url TEXT NOT NULL,
+    api_key_enc TEXT NOT NULL,          -- Fernet 加密后的第三方 API Key
+    model TEXT NOT NULL,
+    temperature REAL NOT NULL DEFAULT 0.8,
+    max_tokens INTEGER NOT NULL DEFAULT 8192,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
+-- 模型路由：按流水线角色（planner/writer/critic/reviser/summarizer）指定不同模型。
+-- 未配置或未启用的角色回退到平台默认（或用户 BYOK）。
+CREATE TABLE IF NOT EXISTS model_routes (
+    role TEXT PRIMARY KEY,              -- planner/writer/critic/reviser/summarizer
+    base_url TEXT NOT NULL,
+    api_key_enc TEXT NOT NULL,          -- Fernet 加密
+    model TEXT NOT NULL,
+    temperature REAL NOT NULL DEFAULT 0.8,
+    max_tokens INTEGER NOT NULL DEFAULT 8192,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
+CREATE TABLE IF NOT EXISTS projects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    idea TEXT NOT NULL,
+    genre TEXT NOT NULL DEFAULT '',
+    target_chapters INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued',  -- queued/running/done/failed
+    progress_msg TEXT NOT NULL DEFAULT '',
+    chapters_done INTEGER NOT NULL DEFAULT 0,
+    error TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    finished_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS chapters (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    idx INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    text TEXT NOT NULL,
+    summary TEXT NOT NULL DEFAULT '',
+    revise_rounds INTEGER NOT NULL DEFAULT 0,
+    issues_json TEXT NOT NULL DEFAULT '[]',
+    UNIQUE(project_id, idx)
+);
+
+CREATE TABLE IF NOT EXISTS usage_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+    model TEXT NOT NULL,
+    prompt_tokens INTEGER NOT NULL DEFAULT 0,
+    completion_tokens INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_usage_user ON usage_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_usage_time ON usage_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
+"""
+
+# 老库兼容：逐列补齐（已存在则忽略）
+_ENSURE_COLUMNS = [
+    ("users", "plan", "TEXT NOT NULL DEFAULT 'free'"),
+    ("users", "plan_chapters", "INTEGER NOT NULL DEFAULT 20"),
+    ("users", "plan_reset_at", "TEXT"),
+    ("users", "extra_chapters", "INTEGER NOT NULL DEFAULT 0"),
+    ("orders", "channel", "TEXT NOT NULL DEFAULT 'mock'"),
+    ("orders", "trade_no", "TEXT"),
+    ("projects", "target_words", "INTEGER NOT NULL DEFAULT 3000"),
+]
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    for table, col, ddl in _ENSURE_COLUMNS:
+        try:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
+        except sqlite3.OperationalError:
+            pass
+
+
+def init_db() -> None:
+    with _lock, get_conn() as conn:
+        conn.executescript(SCHEMA)
+        _migrate(conn)
+        conn.commit()
+
+
+def q(sql: str, params: tuple = ()) -> list[sqlite3.Row]:
+    with _lock, get_conn() as conn:
+        return conn.execute(sql, params).fetchall()
+
+
+def q_one(sql: str, params: tuple = ()) -> sqlite3.Row | None:
+    rows = q(sql, params)
+    return rows[0] if rows else None
+
+
+def execute(sql: str, params: tuple = ()) -> int:
+    with _lock, get_conn() as conn:
+        cur = conn.execute(sql, params)
+        conn.commit()
+        return cur.lastrowid

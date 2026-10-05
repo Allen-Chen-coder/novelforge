@@ -1,0 +1,50 @@
+# LLaMA-Factory LoRA 微调配置（本地开源权重微调）
+#
+# 适用场景：Kimi 官方 API 不提供云端微调时，用开源权重（如 Qwen2.5-7B-Instruct、
+# Kimi-K2 系列）+ 本工程产出的 SFT 数据，在本地/租卡 GPU 上 LoRA 微调，
+# 把"文风 + 章节任务卡格式"蒸馏进小模型，再私有化部署为写作后端。
+#
+# 快速开始：
+#   git clone https://github.com/hiyouga/LLaMA-Factory.git && cd LLaMA-Factory
+#   pip install -e ".[torch,metrics]"
+#   llamafactory-cli train train_lora/llamafactory_qwen25_7b_lora.yaml
+#
+# 数据准备：先用 scripts/build_finetune_data.py 生成 sft_messages.jsonl，
+# 在 dataset_info.json 里注册（见下方 dataset_info 片段）。
+
+model_name_or_path: Qwen/Qwen2.5-7B-Instruct
+stage: sft
+do_train: true
+finetuning_type: lora
+lora_target: all
+lora_rank: 16
+lora_alpha: 32
+
+dataset: novel_sft            # 需在 LLaMA-Factory data/dataset_info.json 注册，见下
+template: qwen
+cutoff_len: 8192
+max_samples: 100000
+overwrite_cache: true
+preprocessing_num_workers: 8
+
+output_dir: saves/qwen25-7b-lora-novel
+logging_steps: 10
+save_steps: 500
+plot_loss: true
+overwrite_output_dir: true
+
+per_device_train_batch_size: 2
+gradient_accumulation_steps: 8
+learning_rate: 2.0e-4        # LoRA 常用 1e-4 ~ 5e-4
+num_train_epochs: 3.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.03
+fp16: true
+
+# ---- data/dataset_info.json 注册片段（把 sft_messages.jsonl 拷到 LLaMA-Factory/data/ 下）----
+# "novel_sft": {
+#   "file_name": "sft_messages.jsonl",
+#   "formatting": "sharegpt",
+#   "columns": {"messages": "messages"},
+#   "tags": {"role_tag": "role", "content_tag": "content"}
+# }

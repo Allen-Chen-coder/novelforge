@@ -1,0 +1,76 @@
+{
+  "title": "Mock 之书",
+  "logline": "一个用于验证流水线的 mock 故事。",
+  "world_setting": "mock 世界，规则自洽。",
+  "characters": [
+    {
+      "name": "林默",
+      "role": "主角",
+      "goal": "找回记忆",
+      "traits": "冷静、克制",
+      "state": ""
+    },
+    {
+      "name": "苏离",
+      "role": "盟友",
+      "goal": "揭开真相",
+      "traits": "机敏、多疑",
+      "state": ""
+    }
+  ],
+  "foreshadowing": [
+    {
+      "setup": "林默腕上的旧伤疤",
+      "planned_payoff": "第8章揭示来历",
+      "status": "open",
+      "chapter": null
+    }
+  ],
+  "chapters": [
+    {
+      "index": 1,
+      "title": "醒来",
+      "text": "林默是在一阵消毒水味里醒来的。\n\n天花板白得刺眼，他抬手去挡，却看见腕上一道旧伤疤——他不记得自己受过这样的伤。\n\n窗外忽然有人喊他的名字。那声音很熟悉，熟悉得让他心口发紧。\n\n（mock 正文，用于验证流水线，接入真实 API 后此处为模型生成内容。）",
+      "summary": "本章完成既定剧情目标，结尾钩子成立。",
+      "revise_rounds": 0,
+      "issues": [
+        {
+          "severity": "minor",
+          "category": "节奏",
+          "description": "中段信息密度略低",
+          "suggestion": "压缩过渡段落"
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "title": "旧友",
+      "text": "林默是在一阵消毒水味里醒来的。\n\n天花板白得刺眼，他抬手去挡，却看见腕上一道旧伤疤——他不记得自己受过这样的伤。\n\n窗外忽然有人喊他的名字。那声音很熟悉，熟悉得让他心口发紧。\n\n（mock 正文，用于验证流水线，接入真实 API 后此处为模型生成内容。）",
+      "summary": "本章完成既定剧情目标，结尾钩子成立。",
+      "revise_rounds": 0,
+      "issues": [
+        {
+          "severity": "minor",
+          "category": "节奏",
+          "description": "中段信息密度略低",
+          "suggestion": "压缩过渡段落"
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "title": "线索",
+      "text": "林默是在一阵消毒水味里醒来的。\n\n天花板白得刺眼，他抬手去挡，却看见腕上一道旧伤疤——他不记得自己受过这样的伤。\n\n窗外忽然有人喊他的名字。那声音很熟悉，熟悉得让他心口发紧。\n\n（mock 正文，用于验证流水线，接入真实 API 后此处为模型生成内容。）",
+      "summary": "本章完成既定剧情目标，结尾钩子成立。",
+      "revise_rounds": 0,
+      "issues": [
+        {
+          "severity": "minor",
+          "category": "节奏",
+          "description": "中段信息密度略低",
+          "suggestion": "压缩过渡段落"
+        }
+      ]
+    }
+  ]
+}

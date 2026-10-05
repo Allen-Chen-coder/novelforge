@@ -1,0 +1,53 @@
+{
+  "title": "Mock 之书",
+  "logline": "一个用于验证流水线的 mock 故事。",
+  "world_setting": "mock 世界，规则自洽。",
+  "characters": [
+    {
+      "name": "林默",
+      "role": "主角",
+      "goal": "找回记忆",
+      "traits": "冷静、克制"
+    },
+    {
+      "name": "苏离",
+      "role": "盟友",
+      "goal": "揭开真相",
+      "traits": "机敏、多疑"
+    }
+  ],
+  "foreshadowing": [
+    {
+      "setup": "林默腕上的旧伤疤",
+      "planned_payoff": "第8章揭示来历"
+    }
+  ],
+  "volumes": [
+    {
+      "volume_title": "第一卷 迷雾",
+      "chapters": [
+        {
+          "index": 1,
+          "title": "醒来",
+          "goal": "主角在陌生房间醒来，建立悬念",
+          "conflict": "不知道自己是谁",
+          "hook": "窗外传来自己的名字"
+        },
+        {
+          "index": 2,
+          "title": "旧友",
+          "goal": "苏离登场，交换信息",
+          "conflict": "互相试探",
+          "hook": "发现照片里多出不认识的人"
+        },
+        {
+          "index": 3,
+          "title": "线索",
+          "goal": "两人决定合作",
+          "conflict": "追兵出现",
+          "hook": "追兵首领喊出了主角真名"
+        }
+      ]
+    }
+  ]
+}

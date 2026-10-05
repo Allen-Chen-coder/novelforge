@@ -1,0 +1,22 @@
+# 依赖与构建产物
+node_modules/
+dist/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 敏感数据与运行产物（切勿入库）
+.env
+!.env.example
+novel_platform/backend/data/*.db
+novel_platform/backend/data/*.db-journal
+novel_platform/backend/data/runs/
+
+# 日志与临时文件
+*.log
+.DS_Store
+Thumbs.db
+
+# 调研草稿不入产品库
+research/
