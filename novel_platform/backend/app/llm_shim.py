@@ -6,7 +6,24 @@ from pathlib import Path
 from typing import Callable, Optional
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
-NOVEL_AGENT_ROOT = BACKEND_ROOT.parents[1] / "novel_agent"
+
+
+def _find_novel_agent_root() -> Path:
+    """定位包含 novel_agent 包的根目录，兼容两种布局：
+    - 本地仓库：ws/novel_agent/（backend 的上上级）
+    - 服务器：/opt/novelforge/novel_agent/（backend 的同级）
+    """
+    for cand in (
+        BACKEND_ROOT / "novel_agent",            # backend/novel_agent
+        BACKEND_ROOT.parent / "novel_agent",     # <部署根>/novel_agent
+        BACKEND_ROOT.parents[1] / "novel_agent",  # 本地仓库布局
+    ):
+        if (cand / "novel_agent" / "llm.py").exists():
+            return cand
+    return BACKEND_ROOT.parent / "novel_agent"  # 兜底：让 import 报错可定位
+
+
+NOVEL_AGENT_ROOT = _find_novel_agent_root()
 if str(NOVEL_AGENT_ROOT) not in sys.path:
     sys.path.insert(0, str(NOVEL_AGENT_ROOT))
 
