@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -16,14 +17,17 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 
 # 生产形态：后端直接托管前端构建产物（dist 存在时启用，单进程/单容器部署）
 DIST_DIR = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+# 前后端分离部署时的跨域来源：鉴权用 Bearer Token（非 Cookie），* 是安全的；
+# 可用 CORS_ALLOW_ORIGINS 环境变量收紧，多个来源用逗号分隔
+CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ALLOW_ORIGINS", "*").split(",") if o.strip()]
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="墨卷 NovelForge API", version="0.1.0")
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000", "http://localhost:7100", "http://127.0.0.1:3000"],
-        allow_credentials=True,
+        allow_origins=CORS_ORIGINS,
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )

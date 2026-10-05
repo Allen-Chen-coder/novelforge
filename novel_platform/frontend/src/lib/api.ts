@@ -1,5 +1,13 @@
-/** API 客户端：统一携带 Token，错误抛出中文消息。 */
+/** API 客户端：统一携带 Token，错误抛出中文消息。
+ *  前后端分离部署时通过 VITE_API_BASE 指定后端地址（如 http://203.195.205.131:8787），
+ *  不配置则默认同源（单进程部署）。 */
 const TOKEN_KEY = "nvf_token";
+const API_BASE: string = (import.meta.env.VITE_API_BASE as string | undefined) || "";
+
+/** 拼出完整 API 地址（fetch 与 EventSource 共用） */
+export function apiUrl(path: string): string {
+  return API_BASE + path;
+}
 
 export function getToken(): string {
   return localStorage.getItem(TOKEN_KEY) || "";
@@ -16,7 +24,7 @@ export async function api<T = any>(
   path: string,
   body?: unknown
 ): Promise<T> {
-  const resp = await fetch(path, {
+  const resp = await fetch(apiUrl(path), {
     method,
     headers: {
       "Content-Type": "application/json; charset=utf-8",

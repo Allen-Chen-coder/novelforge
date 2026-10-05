@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router";
-import { api, getToken } from "@/lib/api";
+import { api, getToken, apiUrl } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import PastimeDock from "@/components/PastimeDock";
 import { Button } from "@/components/ui/button";
@@ -117,7 +117,7 @@ export default function ProjectDetail() {
       esRef.current = null;
       return;
     }
-    const es = new EventSource(`/api/projects/${id}/stream?token=${encodeURIComponent(getToken())}`);
+    const es = new EventSource(`${apiUrl(`/api/projects/${id}/stream`)}?token=${encodeURIComponent(getToken())}`);
     esRef.current = es;
     es.onmessage = (ev) => {
       let msg: any;
