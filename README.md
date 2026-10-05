@@ -19,7 +19,7 @@ npm run dev          # 前端 http://localhost:3000 + 后端 http://localhost:87
 
 默认账号 `admin / admin123`（首次登录后请立即修改）。接入真实模型：管理后台配置服务商 API Key，或用户自带 Key（BYOK）。
 
-详细部署说明见 [novel_platform/DEPLOY.md](novel_platform/DEPLOY.md)。
+生产部署（单进程托管前端 + 后端，含 Docker 镜像）见 [novel_platform/DEPLOY.md](novel_platform/DEPLOY.md)。
 
 ## 核心特性
 
