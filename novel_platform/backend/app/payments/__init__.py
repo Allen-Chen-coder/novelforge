@@ -38,5 +38,4 @@ def get_channel():
     if CHANNEL == "alipay":
         from . import alipay
         return alipay
-    from . import mock
-    return mock
+    raise PaymentError(f"支付通道未配置：PAY_CHANNEL={CHANNEL!r}（可选 wechat / alipay，模拟支付已下线）")

@@ -393,27 +393,13 @@ def _mark_paid(oid: int, trade_no: str = "") -> None:
     _apply_order(dict(order))
 
 
-@router.post("/orders/{oid}/pay")
-def pay_order(oid: int, user: CurrentUser = Depends(get_current_user)):
-    """模拟支付（等价于 checkout 的 mock 通道，兼容旧前端/脚本）。"""
-    order = db.q_one("SELECT * FROM orders WHERE id=?", (oid,))
-    if not order or order["user_id"] != user["id"]:
-        raise HTTPException(404, "订单不存在")
-    if order["status"] == "paid":
-        return dict(order)
-    if order["status"] != "pending":
-        raise HTTPException(400, "订单已关闭，无法支付")
-    _mark_paid(oid, "mock")
-    return dict(db.q_one("SELECT * FROM orders WHERE id=?", (oid,)))
-
-
 class CheckoutIn(BaseModel):
-    channel: str = "mock"   # mock / wechat / alipay
+    channel: str = "wechat"   # wechat / alipay（模拟支付通道已下线）
 
 
 @router.post("/orders/{oid}/checkout")
 def checkout_order(oid: int, body: CheckoutIn, user: CurrentUser = Depends(get_current_user)):
-    """收银台：按通道创建支付会话。mock 即时到账；wechat 返回二维码内容；alipay 返回跳转地址。"""
+    """收银台：按通道创建支付会话。wechat 返回二维码内容；alipay 返回跳转地址。"""
     order = db.q_one("SELECT * FROM orders WHERE id=?", (oid,))
     if not order or order["user_id"] != user["id"]:
         raise HTTPException(404, "订单不存在")
@@ -421,12 +407,9 @@ def checkout_order(oid: int, body: CheckoutIn, user: CurrentUser = Depends(get_c
         return {"type": "paid"}
     if order["status"] != "pending":
         raise HTTPException(400, "订单已关闭，无法支付")
-    if body.channel not in ("mock", "wechat", "alipay"):
+    if body.channel not in ("wechat", "alipay"):
         raise HTTPException(400, "不支持的支付通道")
     db.execute("UPDATE orders SET channel=? WHERE id=?", (body.channel, oid))
-    if body.channel == "mock":
-        _mark_paid(oid, "mock")
-        return {"type": "paid"}
     # 用户显式选择的通道直接调用对应实现（与 PAY_CHANNEL 环境默认无关）
     from .payments import PaymentError
     from .payments import alipay as alipay_channel

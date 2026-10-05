@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   ArrowLeft, Crown, Coins, Receipt, KeyRound, Zap, CheckCircle2, Loader2, Trash2, Save,
-  Smartphone, MonitorSmartphone, FlaskConical,
+  Smartphone, MonitorSmartphone,
 } from "lucide-react";
 import SpotlightCard from "@/components/SpotlightCard";
 
@@ -59,7 +59,7 @@ export default function Billing() {
 
   // 收银台状态
   const [cashierOrder, setCashierOrder] = useState<Order | null>(null); // 已创建、待支付的订单
-  const [channel, setChannel] = useState<"mock" | "wechat" | "alipay">("mock");
+  const [channel, setChannel] = useState<"wechat" | "alipay">("wechat");
   const [qr, setQr] = useState<string | null>(null);      // 微信二维码 data URL
   const [payError, setPayError] = useState("");
   const [paidFlash, setPaidFlash] = useState(false);
@@ -93,7 +93,7 @@ export default function Billing() {
 
   const resetCashier = () => {
     stopPolling();
-    setCashierOrder(null); setQr(null); setPayError(""); setChannel("mock");
+    setCashierOrder(null); setQr(null); setPayError(""); setChannel("wechat");
   };
 
   const onPaid = async () => {
@@ -433,7 +433,6 @@ export default function Billing() {
               <div className="space-y-2">
                 <Label>支付方式</Label>
                 {([
-                  { key: "mock", icon: <FlaskConical className="w-4 h-4" />, name: "模拟支付", desc: "本地演示，点击即到账" },
                   { key: "wechat", icon: <Smartphone className="w-4 h-4" />, name: "微信支付", desc: "生成二维码，微信扫码付款" },
                   { key: "alipay", icon: <MonitorSmartphone className="w-4 h-4" />, name: "支付宝", desc: "跳转到支付宝收银台" },
                 ] as const).map((c) => (
@@ -453,11 +452,9 @@ export default function Billing() {
                   </button>
                 ))}
               </div>
-              {channel !== "mock" && (
-                <p className="text-xs text-zinc-500">
-                  真实收单需站长在服务端配置商户参数（见部署文档 DEPLOY.md）；未配置时支付会失败并提示原因。
-                </p>
-              )}
+              <p className="text-xs text-zinc-500">
+                真实收单需站长在服务端配置商户参数（见部署文档 DEPLOY.md）；未配置时支付会失败并提示原因。
+              </p>
               {payError && <p className="text-sm text-red-400">{payError}</p>}
             </>
           )}
@@ -468,7 +465,7 @@ export default function Billing() {
                 <Button variant="ghost" onClick={() => { setConfirmItem(null); resetCashier(); }}>取消</Button>
                 <Button className="bg-amber-500 text-zinc-950 hover:bg-amber-400" disabled={busy} onClick={buy}>
                   {busy ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
-                  {channel === "mock" ? "立即支付" : "去支付"}
+                  去支付
                 </Button>
               </>
             )}

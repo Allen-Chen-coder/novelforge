@@ -321,7 +321,7 @@ export default function AdminPage() {
             <Card className="bg-zinc-900/60 border-zinc-800">
               <CardHeader>
                 <CardTitle>订单管理</CardTitle>
-                <CardDescription className="text-zinc-400">全部用户的订阅与加油包订单。当前为模拟支付（点击即到账）；接入真实支付网关后由回调驱动状态。</CardDescription>
+                <CardDescription className="text-zinc-400">全部用户的订阅与加油包订单。支付状态由微信/支付宝回调驱动；请在服务端配置商户参数后正式收单。</CardDescription>
               </CardHeader>
               <CardContent>
                 {orders.length === 0 ? (
