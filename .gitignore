@@ -5,3 +5,6 @@ novel_platform/backend/data/
 research/
 shot_small.png
 *.log
+deploy_nvf.py
+github_push_via_ssh.py
+github_tunnel.py
