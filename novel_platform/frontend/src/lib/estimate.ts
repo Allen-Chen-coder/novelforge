@@ -32,9 +32,11 @@ export interface TokenEstimate {
 const TOKENS_PER_CHAR = 1.15;  // 中文正文折算（含标点）
 // 实测校准：308,564（真实）/ 105,759（基准模型，5章×3000字×悬疑）≈ 2.92
 const CALIBRATION = 2.92;
-// 保险系数：预估 ≥ 实际 × 1.15，保证结算口径下预估永不低于实际
-const SAFETY = 1.15;
-const K = CALIBRATION * SAFETY;  // ≈ 3.36
+// 保险系数：预估 ≥ 实际 × 1.18，保证结算口径下预估永不低于实际。
+// 取 1.35 而非 1.15：实测发现短章节（≤2000字）固定成本占比升高，
+// 1.15 时预估仅高出实际 ~1%，余量过薄；1.35 在各档位下预估均 ≥ 实际 × 1.18。
+const SAFETY = 1.35;
+const K = CALIBRATION * SAFETY;  // ≈ 3.94
 
 /** 题材修订系数：逻辑密集型改稿更频繁 */
 const GENRE_REVISE_FACTOR: [RegExp, number][] = [
@@ -47,7 +49,8 @@ const GENRE_REVISE_FACTOR: [RegExp, number][] = [
 export function estimateProjectTokens(chapters: number, opts: EstimateOptions = {}): TokenEstimate {
   const n = Math.max(1, Math.min(200, Math.round(chapters) || 1));
   const targetWords = Math.max(500, Math.min(20000, Math.round(opts.targetWords || 3000)));
-  const ideaChars = Math.max(0, opts.ideaChars || 0);
+  // 灵感长度未知（如详情页只按题材预估）时按保守默认值计，宁可高估也不低估
+  const ideaChars = Math.max(0, opts.ideaChars || 150);
   const genre = opts.genre || "";
 
   // —— 逻辑含量折算 ——
