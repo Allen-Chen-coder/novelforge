@@ -12,6 +12,9 @@ import { Coins, X } from "lucide-react";
 export default function UpgradeNudge({ pending = 0 }: { pending?: number }) {
   const { user } = useAuth();
   const nav = useNavigate();
+  // 用户侧按字数展示（内部以章结算，1 章 ≈ 1000 字）
+  const ch2w = (c: number) =>
+    c >= 10 ? `${(c / 10).toFixed(c % 10 === 0 ? 0 : 1)} 万字` : `${c * 1000} 字`;
   // 本次登录内可关闭，且在创作台 / 生成页共享同一份标记
   const [off, setOff] = useState(() => sessionStorage.getItem("nvf_nudge_off") === "1");
 
@@ -37,16 +40,16 @@ export default function UpgradeNudge({ pending = 0 }: { pending?: number }) {
   let headline: string;
   let sub: string;
   if (pending > 0) {
-    headline = projTotal <= 0 ? "本工程完成后额度将耗尽" : `本工程完成后额度仅剩 ${projTotal} 章`;
-    sub = `本工程将占用 ${pending} 章，升级套餐或购买加油包，保证全书顺利交付`;
+    headline = projTotal <= 0 ? "本工程完成后额度将耗尽" : `本工程完成后额度仅剩 ${ch2w(projTotal)}`;
+    sub = `本工程将占用 ${ch2w(pending)}，升级套餐或购买加油包，保证全书顺利交付`;
   } else if (monthLeft <= 0 && user.extra_chapters <= 0) {
     headline = "本月额度已用完";
     sub = "升级套餐或购买加油包，让创作不断更";
   } else if (monthLeft <= 0) {
     headline = "套餐额度已用完，正在抵扣加油包";
-    sub = `加油包还剩 ${user.extra_chapters} 章，升级套餐更划算`;
+    sub = `加油包还剩 ${ch2w(user.extra_chapters)}，升级套餐更划算`;
   } else {
-    headline = `本月额度仅剩 ${totalLeft} 章`;
+    headline = `本月额度仅剩 ${ch2w(totalLeft)}`;
     sub = "升级套餐或购买加油包，让创作不断更";
   }
 

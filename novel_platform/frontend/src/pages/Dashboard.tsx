@@ -38,6 +38,10 @@ interface Project {
 
 const GENRES = ["男频都市爽文", "女频言情", "玄幻修真", "科幻末世", "悬疑推理", "历史架空", "武侠江湖", "短篇脑洞"];
 
+// 用户侧按字数展示（内部以章结算，1 章 ≈ 1000 字）
+const ch2w = (c: number) =>
+  c >= 10 ? `${(c / 10).toFixed(c % 10 === 0 ? 0 : 1)} 万字` : `${c * 1000} 字`;
+
 function greeting() {
   const h = new Date().getHours();
   if (h < 6) return "夜深了";
@@ -166,8 +170,8 @@ export default function Dashboard() {
                 <span className="text-emerald-400">自有 API · 不限额度</span>
               ) : (
                 <>
-                  {user?.plan_name} · 本月剩余 <span className="tnum text-zinc-300">{monthLeft}</span> 章
-                  {user && user.extra_chapters > 0 && <span className="tnum"> + 加油包 {user.extra_chapters}</span>}
+                  {user?.plan_name} · 本月剩余 <span className="tnum text-zinc-300">{ch2w(monthLeft)}</span>
+                  {user && user.extra_chapters > 0 && <span className="tnum"> + 加油包 {ch2w(user.extra_chapters)}</span>}
                 </>
               )}
             </span>
@@ -214,7 +218,7 @@ export default function Dashboard() {
           <div className="lg:hidden animate-rise" style={{ "--i": 2 } as React.CSSProperties}>
             <div className="rounded-xl glass-edge bg-zinc-900/60 px-4 py-3 text-xs text-zinc-400">
               {user?.byok ? <span className="text-emerald-400">自有 API · 不限额度</span> : (
-                <><span className="tnum text-zinc-200">{monthLeft}</span> / {user?.plan_chapters} 章本月剩余{user && user.extra_chapters > 0 && <> · 加油包 <span className="tnum">{user.extra_chapters}</span></>}</>
+                <><span className="tnum text-zinc-200">{ch2w(monthLeft)}</span> / {user ? ch2w(user.plan_chapters) : "—"} 本月剩余{user && user.extra_chapters > 0 && <> · 加油包 <span className="tnum">{ch2w(user.extra_chapters)}</span></>}</>
               )}
             </div>
           </div>
@@ -223,12 +227,12 @@ export default function Dashboard() {
             <div className="rounded-2xl glass-edge bg-zinc-900/60 backdrop-blur px-6 py-4 flex items-center gap-6">
               <div>
                 <p className="text-[11px] tracking-wider text-zinc-500 uppercase">本月剩余</p>
-                <p className="text-2xl font-semibold tnum text-amber-300 mt-0.5">{monthLeft}<span className="text-sm font-normal text-zinc-500"> / {user?.plan_chapters ?? "—"}</span></p>
+                <p className="text-2xl font-semibold tnum text-amber-300 mt-0.5">{ch2w(monthLeft)}<span className="text-sm font-normal text-zinc-500"> / {user ? ch2w(user.plan_chapters) : "—"}</span></p>
               </div>
               <div className="w-px h-9 bg-white/[0.07]" />
               <div>
                 <p className="text-[11px] tracking-wider text-zinc-500 uppercase">加油包</p>
-                <p className="text-2xl font-semibold tnum text-zinc-200 mt-0.5">{user?.extra_chapters ?? 0}<span className="text-sm font-normal text-zinc-500"> 章</span></p>
+                <p className="text-2xl font-semibold tnum text-zinc-200 mt-0.5">{ch2w(user?.extra_chapters ?? 0)}</p>
               </div>
               <div className="w-px h-9 bg-white/[0.07]" />
               <div>
@@ -277,9 +281,9 @@ export default function Dashboard() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>首批更新章节数（消耗额度）</Label>
+                    <Label>首批更新章节数</Label>
                     <Input type="number" min={1} max={200} value={form.target_chapters} onChange={(e) => setForm({ ...form, target_chapters: Number(e.target.value) })} className="bg-zinc-950/80 border-zinc-800 tnum focus-visible:ring-amber-500/40" />
-                    <p className="text-xs text-zinc-600">连载作品不设总章数上限，之后随时追加更新</p>
+                    <p className="text-xs text-zinc-600">连载作品不设总章数上限，之后随时追加更新；额度按字数计</p>
                   </div>
                   <div className="space-y-2">
                     <Label>每章字数</Label>
@@ -307,7 +311,7 @@ export default function Dashboard() {
                 {shortfall > 0 && (
                   <p className="text-sm text-amber-200/90 border border-amber-500/30 bg-amber-500/[0.08] rounded-lg px-3 py-2 flex items-start gap-1.5">
                     <Coins className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-400" />
-                    本工程需要 <span className="tnum">{form.target_chapters}</span> 章，当前剩余 <span className="tnum">{available}</span> 章，还差 <span className="tnum">{shortfall}</span> 章
+                    本工程需要 <span className="tnum">{ch2w(form.target_chapters)}</span>，当前剩余 <span className="tnum">{ch2w(available)}</span>，还差 <span className="tnum">{ch2w(shortfall)}</span>
                   </p>
                 )}
               </div>

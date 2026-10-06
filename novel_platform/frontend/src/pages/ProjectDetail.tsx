@@ -64,6 +64,10 @@ const FEED_DOT: Record<FeedItem["kind"], string> = {
   fail: "bg-red-400",
 };
 
+// 用户侧按字数展示（内部以章结算，1 章 ≈ 1000 字）
+const ch2w = (c: number) =>
+  c >= 10 ? `${(c / 10).toFixed(c % 10 === 0 ? 0 : 1)} 万字` : `${c * 1000} 字`;
+
 /** 进度原文压缩成弹幕短句 */
 function shorten(msg: string): string {
   const clean = msg.replace(/\s+/g, " ").trim();
@@ -352,9 +356,9 @@ export default function ProjectDetail() {
               {user.byok ? (
                 <span className="text-emerald-400">自有 API · 不限额度</span>
               ) : running ? (
-                <>本月剩余 <span className="tnum text-zinc-300">{monthLeft + user.extra_chapters}</span> 章 · 完成后预计剩 <span className={`tnum ${projLeft <= 3 ? "text-amber-400" : "text-zinc-300"}`}>{projLeft}</span> 章</>
+                <>本月剩余 <span className="tnum text-zinc-300">{ch2w(monthLeft + user.extra_chapters)}</span> · 完成后预计剩 <span className={`tnum ${projLeft <= 3 ? "text-amber-400" : "text-zinc-300"}`}>{ch2w(projLeft)}</span></>
               ) : (
-                <>本月剩余 <span className="tnum text-zinc-300">{monthLeft + user.extra_chapters}</span> 章</>
+                <>本月剩余 <span className="tnum text-zinc-300">{ch2w(monthLeft + user.extra_chapters)}</span></>
               )}
             </span>
           )}
@@ -608,7 +612,7 @@ export default function ProjectDetail() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>本次更新章节数（消耗额度）</Label>
+              <Label>本次更新章节数</Label>
               <Input type="number" min={1} max={200} value={extendChapters}
                 onChange={(e) => setExtendChapters(Number(e.target.value))}
                 className="bg-zinc-950/80 border-zinc-800 tnum focus-visible:ring-amber-500/40" />

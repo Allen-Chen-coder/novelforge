@@ -35,6 +35,13 @@ from .schemas import (
 router = APIRouter(prefix="/api")
 
 
+def _w(chapters: int) -> str:
+    """用户侧字数展示（内部以章结算，1 章 ≈ 1000 字）。"""
+    if chapters >= 10:
+        return f"{(chapters / 10):.0f} 万字" if chapters % 10 == 0 else f"{(chapters / 10):.1f} 万字"
+    return f"{chapters * 1000} 字"
+
+
 # --------------------------------------------------------------------- #
 # 认证
 # --------------------------------------------------------------------- #
@@ -198,7 +205,7 @@ def create_project(body: ProjectCreateIn, user: CurrentUser = Depends(get_curren
         remaining = max(0, _eff_plan_chapters(user) - user["used_chapters"]) + user["extra_chapters"]
         if body.target_chapters > remaining:
             raise HTTPException(
-                403, f"额度不足：剩余 {remaining} 章，本工程需要 {body.target_chapters} 章，可到「额度中心」升级套餐或购买加油包"
+                403, f"额度不足：剩余 {_w(remaining)}，本工程需要 {_w(body.target_chapters)}，可到「额度中心」升级套餐或购买加油包"
             )
     pid = db.execute(
         "INSERT INTO projects(user_id,name,idea,genre,target_chapters,target_words) VALUES(?,?,?,?,?,?)",
@@ -227,7 +234,7 @@ def extend_project(pid: int, body: ProjectExtendIn, user: CurrentUser = Depends(
         remaining = max(0, _eff_plan_chapters(user) - user["used_chapters"]) + user["extra_chapters"]
         if body.chapters > remaining:
             raise HTTPException(
-                403, f"额度不足：剩余 {remaining} 章，本次续写需要 {body.chapters} 章，可到「额度中心」升级套餐或购买加油包"
+                403, f"额度不足：剩余 {_w(remaining)}，本次续写需要 {_w(body.chapters)}，可到「额度中心」升级套餐或购买加油包"
             )
 
     from .runner import RUNS_DIR
@@ -287,7 +294,7 @@ def restart_project(pid: int, user: CurrentUser = Depends(get_current_user)):
         unfinished = max(0, proj["target_chapters"] - proj["chapters_done"])
         if unfinished > remaining:
             raise HTTPException(
-                403, f"额度不足：剩余 {remaining} 章，本工程还差 {unfinished} 章未生成，可到「额度中心」升级套餐或购买加油包"
+                403, f"额度不足：剩余 {_w(remaining)}，本工程还差 {unfinished} 章未生成，可到「额度中心」升级套餐或购买加油包"
             )
     db.execute(
         "UPDATE projects SET status='queued', progress_msg='重新开始排队…', error=NULL, finished_at=NULL WHERE id=?",

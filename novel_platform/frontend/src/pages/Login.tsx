@@ -339,7 +339,7 @@ export default function LoginPage() {
           </div>
 
           <p className="text-xs text-zinc-600 mt-6">
-            注册即表示同意平台服务条款 · 免费版每月 1 章体验额度（前 1000 字）
+            注册即表示同意平台服务条款 · 免费版每月 1000 字体验额度
           </p>
         </div>
       </main>

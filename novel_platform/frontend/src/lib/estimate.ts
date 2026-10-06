@@ -92,7 +92,7 @@ export function formatTokens(t: number): string {
 export function estimateBreakdown(e: TokenEstimate): string {
   return [
     `整书策划：${formatTokens(e.plan)}`,
-    `章节写作（${e.chapters} 章）：${formatTokens(e.write)}`,
+    `章节写作（约 ${e.chapters * 1000} 字）：${formatTokens(e.write)}`,
     `审校：${formatTokens(e.critique)}`,
     `修订（期望 ${e.reviseRounds} 轮/章）：${formatTokens(e.revise)}`,
     `合计：${formatTokens(e.total)} tokens`,

@@ -46,6 +46,9 @@ interface MyProvider {
 
 const fmt = (cents: number) => (cents === 0 ? "¥0" : `¥${(cents / 100).toFixed(0)}`);
 const fmtDate = (d: string | null) => (d ? d.slice(0, 10) : "—");
+// 用户侧按字数展示（内部以章结算，1 章 ≈ 1000 字）
+const ch2w = (c: number) =>
+  c >= 10 ? `${(c / 10).toFixed(c % 10 === 0 ? 0 : 1)} 万字` : `${c * 1000} 字`;
 
 export default function Billing() {
   const { user, refresh } = useAuth();
@@ -236,7 +239,7 @@ export default function Billing() {
 
   const planCard = (p: CatalogItem, i: number) => {
     const isCurrent = b?.plan === p.code;
-    const per = p.chapters > 0 && p.price_cents > 0 ? `折合 ¥${(p.price_cents / 100 / p.chapters).toFixed(2)}/章` : "";
+    const per = p.chapters > 0 && p.price_cents > 0 ? `折合 ¥${(p.price_cents / 100 / p.chapters).toFixed(2)}/千字` : "";
     return (
       <SpotlightCard key={p.code}
         className={`rounded-2xl border bg-zinc-900/60 flex flex-col h-full transition-all duration-300 ease-fluid hover:-translate-y-0.5 animate-rise ${
@@ -254,7 +257,7 @@ export default function Billing() {
           <p className="text-3xl font-semibold tnum tracking-tight text-amber-300 mb-1">
             {fmt(p.price_cents)}<span className="text-sm font-normal text-zinc-500"> /月</span>
           </p>
-          <p className="text-xs text-zinc-500 mb-5 tnum">每月 {p.chapters} 章{per && <span> · {per}</span>}</p>
+          <p className="text-xs text-zinc-500 mb-5 tnum">每月 {ch2w(p.chapters)}{per && <span> · {per}</span>}</p>
           <ul className="space-y-2.5 text-sm text-zinc-300 flex-1">
             {p.features.map((f) => (
               <li key={f} className="flex gap-2.5 leading-relaxed"><CheckCircle2 className="w-4 h-4 text-emerald-500/80 shrink-0 mt-0.5" strokeWidth={1.75} />{f}</li>
@@ -290,9 +293,9 @@ export default function Billing() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             { label: "当前套餐", value: <span className="text-amber-300">{b?.plan_name ?? "—"}</span>, sub: b?.plan_reset_at ? `${fmtDate(b.plan_reset_at)} 重置` : "" },
-            { label: "本月额度", value: <><span className="tnum">{b ? Math.max(0, b.plan_chapters - b.used_chapters) : "—"}</span> <span className="text-sm font-normal text-zinc-500">/ {b?.plan_chapters ?? "—"} 章</span></>, sub: `已用 ${b?.used_chapters ?? 0} 章` },
-            { label: "加油包余额", value: <span className="tnum">{b?.extra_chapters ?? 0}</span>, sub: "永久有效，套餐用完后自动抵扣" },
-            { label: "自有 API（BYOK）", value: b?.byok ? <span className="text-emerald-400">已启用</span> : <span className="text-zinc-500">未配置</span>, sub: b?.byok ? "生成不消耗章节额度" : "配置后生成走自己的 Key" },
+            { label: "本月额度", value: <><span className="tnum">{b ? ch2w(Math.max(0, b.plan_chapters - b.used_chapters)) : "—"}</span> <span className="text-sm font-normal text-zinc-500">/ {b ? ch2w(b.plan_chapters) : "—"}</span></>, sub: `已用 ${ch2w(b?.used_chapters ?? 0)}` },
+            { label: "加油包余额", value: <span className="tnum">{ch2w(b?.extra_chapters ?? 0)}</span>, sub: "永久有效，套餐用完后自动抵扣" },
+            { label: "自有 API（BYOK）", value: b?.byok ? <span className="text-emerald-400">已启用</span> : <span className="text-zinc-500">未配置</span>, sub: b?.byok ? "生成不消耗字数额度" : "配置后生成走自己的 Key" },
           ].map((c, i) => (
             <div key={c.label} className="rounded-2xl glass-edge bg-zinc-900/60 backdrop-blur px-5 py-4 animate-rise" style={{ "--i": i } as React.CSSProperties}>
               <p className="text-[11px] tracking-wider text-zinc-500 uppercase">{c.label}</p>
@@ -340,7 +343,7 @@ export default function Billing() {
                     </p>
                     <p className="text-xs text-zinc-500 mb-5">{p.tagline}</p>
                     <p className="text-3xl font-semibold tnum tracking-tight text-amber-300 mb-1">{fmt(p.price_cents)}</p>
-                    <p className="text-xs text-zinc-500 flex-1 tnum">{p.chapters} 章额度 · 永久有效 · 不限购买次数</p>
+                    <p className="text-xs text-zinc-500 flex-1 tnum">{ch2w(p.chapters)}额度 · 永久有效 · 不限购买次数</p>
                     <Button className="bg-amber-500 text-zinc-950 hover:bg-amber-400 active:scale-[0.97] transition-all duration-300 ease-fluid font-semibold mt-5" disabled={busy} onClick={() => setConfirmItem(p)}>
                       购买
                     </Button>
@@ -370,7 +373,7 @@ export default function Billing() {
                           <TableCell className="text-zinc-500">#{o.id}</TableCell>
                           <TableCell className="font-medium">{o.title}</TableCell>
                           <TableCell>{fmt(o.amount_cents)}</TableCell>
-                          <TableCell>{o.kind === "plan" ? `订阅 · ${o.chapters} 章/月` : `+${o.chapters} 章`}</TableCell>
+                          <TableCell>{o.kind === "plan" ? `订阅 · ${ch2w(o.chapters)}/月` : `+${ch2w(o.chapters)}`}</TableCell>
                           <TableCell>{statusBadge(o.status)}</TableCell>
                           <TableCell className="text-zinc-500 text-sm">{o.created_at}</TableCell>
                           <TableCell>
@@ -403,7 +406,7 @@ export default function Billing() {
                 </CardTitle>
                 <CardDescription className="text-zinc-400">
                   填入你自己的 OpenAI 兼容接口（Kimi / DeepSeek / 通义 / OpenAI 等），生成将走你的 Key——
-                  <span className="text-amber-300">不消耗平台章节额度</span>，仅保留同时 2 个工程的并发限制；用量照常记录便于你核对。
+                  <span className="text-amber-300">不消耗平台字数额度</span>，仅保留同时 2 个工程的并发限制；用量照常记录便于你核对。
                   {provider?.configured && <> 当前 Key：<code className="text-amber-300">{provider.key_preview}</code>（掩码），更新于 {provider.updated_at}</>}
                 </CardDescription>
               </CardHeader>
@@ -509,7 +512,7 @@ export default function Billing() {
                 <>
                   {confirmItem.name} — {fmt(confirmItem.price_cents)}
                   {confirmItem.months ? ` / ${confirmItem.months} 个月` : ""}
-                  ，含 {confirmItem.chapters} 章{confirmItem.months ? "/月" : ""} 生成额度。
+                  ，含 {ch2w(confirmItem.chapters)}{confirmItem.months ? "/月" : ""} 生成额度。
                 </>
               )}
               {cashierOrder && `订单 #${cashierOrder.id} ｜ ${cashierOrder.title} ｜ ${fmt(cashierOrder.amount_cents)}`}
