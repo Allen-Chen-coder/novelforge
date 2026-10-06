@@ -272,6 +272,22 @@ export default function ProjectDetail() {
     URL.revokeObjectURL(a.href);
   };
 
+  // 导出署名：选 PDF/Word 时先询问笔名，本地记忆
+  const [exportFmt, setExportFmt] = useState<"pdf" | "docx" | null>(null);
+  const [authorName, setAuthorName] = useState(() => localStorage.getItem("nvf_author") || "");
+
+  const confirmExport = async () => {
+    if (!exportFmt) return;
+    const author = authorName.trim();
+    localStorage.setItem("nvf_author", author);
+    const fmt = exportFmt;
+    setExportFmt(null);
+    await exportFile(
+      `/api/projects/${id}/export.${fmt}?author=${encodeURIComponent(author)}`,
+      `${detail?.name || "novel"}.${fmt}`
+    ).catch((e) => alert(e.message));
+  };
+
   if (!detail)
     return (
       <div className="min-h-[100dvh] bg-zinc-950 ink-bg flex items-center justify-center">
@@ -352,7 +368,7 @@ export default function ProjectDetail() {
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer"
-                  onSelect={() => exportFile(`/api/projects/${id}/export.pdf`, `${detail.name}.pdf`).catch((e) => alert(e.message))}
+                  onSelect={() => setExportFmt("pdf")}
                 >
                   <Download className="w-4 h-4 mr-2 text-amber-500/70" />
                   <div>
@@ -362,7 +378,7 @@ export default function ProjectDetail() {
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer"
-                  onSelect={() => exportFile(`/api/projects/${id}/export.docx`, `${detail.name}.docx`).catch((e) => alert(e.message))}
+                  onSelect={() => setExportFmt("docx")}
                 >
                   <Download className="w-4 h-4 mr-2 text-sky-500/70" />
                   <div>
@@ -593,6 +609,34 @@ export default function ProjectDetail() {
               className="bg-amber-500 text-zinc-950 hover:bg-amber-400 active:scale-[0.97] transition-all duration-300 ease-fluid font-semibold">
               {extendBusy ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <BookPlus className="w-4 h-4 mr-1" />}
               {extendBusy ? "规划中…" : "开始续写"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 导出署名对话框：PDF/Word 封面落款 */}
+      <Dialog open={exportFmt !== null} onOpenChange={(v) => { if (!v) setExportFmt(null); }}>
+        <DialogContent className="bg-zinc-900 border-zinc-800 text-zinc-100 sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>导出《{detail.name}》</DialogTitle>
+            <DialogDescription className="text-zinc-400 leading-relaxed">
+              署名将印在{exportFmt === "pdf" ? " PDF 封面" : " Word 封面"}书名下方，留空则不显示。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>作者笔名</Label>
+            <Input value={authorName} maxLength={30}
+              onChange={(e) => setAuthorName(e.target.value)}
+              placeholder="例如：青衫烟雨"
+              className="bg-zinc-950/80 border-zinc-800 focus-visible:ring-amber-500/40"
+              onKeyDown={(e) => { if (e.key === "Enter") confirmExport(); }} />
+            <p className="text-xs text-zinc-500">笔名仅用于本次导出，保存在本机，下次自动填入。</p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setExportFmt(null)} className="text-zinc-500 hover:text-zinc-300">取消</Button>
+            <Button onClick={confirmExport}
+              className="bg-amber-500 text-zinc-950 hover:bg-amber-400 active:scale-[0.97] transition-all duration-300 ease-fluid font-semibold">
+              <Download className="w-4 h-4 mr-1" />确认导出
             </Button>
           </DialogFooter>
         </DialogContent>

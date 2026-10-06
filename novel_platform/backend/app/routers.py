@@ -378,24 +378,24 @@ def _attachment(filename: str, media_type: str, content: bytes) -> Response:
 
 
 @router.get("/projects/{pid}/export.pdf")
-def export_pdf(pid: int, user: CurrentUser = Depends(get_current_user)):
+def export_pdf(pid: int, author: str = "", user: CurrentUser = Depends(get_current_user)):
     name, chapters = _export_chapters(pid, user)
     from . import exporters
 
     try:
-        data = exporters.build_pdf(name, chapters)
+        data = exporters.build_pdf(name, chapters, author=author.strip()[:30])
     except ImportError:
         raise HTTPException(500, "PDF 组件未安装，请联系管理员")
     return _attachment(f"{name}.pdf", "application/pdf", data)
 
 
 @router.get("/projects/{pid}/export.docx")
-def export_docx(pid: int, user: CurrentUser = Depends(get_current_user)):
+def export_docx(pid: int, author: str = "", user: CurrentUser = Depends(get_current_user)):
     name, chapters = _export_chapters(pid, user)
     from . import exporters
 
     try:
-        data = exporters.build_docx(name, chapters)
+        data = exporters.build_docx(name, chapters, author=author.strip()[:30])
     except ImportError:
         raise HTTPException(500, "Word 组件未安装，请联系管理员")
     return _attachment(

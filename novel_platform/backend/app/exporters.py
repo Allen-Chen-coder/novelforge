@@ -33,7 +33,7 @@ def _meta(chapters: list[dict]) -> dict:
 # --------------------------------------------------------------------- #
 # PDF：reportlab 排版，内置 STSong-Light CID 字体，无需字体文件
 # --------------------------------------------------------------------- #
-def build_pdf(book_name: str, chapters: list[dict]) -> bytes:
+def build_pdf(book_name: str, chapters: list[dict], author: str = "") -> bytes:
     from io import BytesIO
 
     from reportlab.lib.colors import HexColor
@@ -95,7 +95,7 @@ def build_pdf(book_name: str, chapters: list[dict]) -> bytes:
         topMargin=2.4 * cm,
         bottomMargin=2.2 * cm,
         title=book_name,
-        author="墨卷 NovelForge",
+        author=author or "墨卷 NovelForge",
     )
 
     title_style = ParagraphStyle(
@@ -119,7 +119,14 @@ def build_pdf(book_name: str, chapters: list[dict]) -> bytes:
     story: list = [
         Spacer(1, 5.5 * cm),
         Paragraph(book_name, title_style),
-        HRFlowable(width="38%", thickness=1, color=GOLD, hAlign="CENTER", spaceAfter=8 * mm),
+        HRFlowable(width="38%", thickness=1, color=GOLD, hAlign="CENTER", spaceAfter=6 * mm),
+    ]
+    if author:
+        story.append(Paragraph(author, ParagraphStyle(
+            "author", fontName=FONT, fontSize=14, leading=24,
+            textColor=INK, alignment=1, spaceAfter=4 * mm,
+        )))
+    story += [
         Paragraph(
             f"全书共 {meta['chapter_count']} 章 · 约 {meta['total_words']} 字",
             sub_style,
@@ -148,7 +155,7 @@ def build_pdf(book_name: str, chapters: list[dict]) -> bytes:
 # --------------------------------------------------------------------- #
 # Word：python-docx，正文宋体小四、1.5 倍行距、首行缩进两字符
 # --------------------------------------------------------------------- #
-def build_docx(book_name: str, chapters: list[dict]) -> bytes:
+def build_docx(book_name: str, chapters: list[dict], author: str = "") -> bytes:
     from io import BytesIO
 
     import docx
@@ -178,6 +185,14 @@ def build_docx(book_name: str, chapters: list[dict]) -> bytes:
     r.font.bold = True
     set_ea(r, "黑体")
     t.paragraph_format.space_before = Pt(120)
+
+    if author:
+        ap = d.add_paragraph()
+        ap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        ar = ap.add_run(author)
+        ar.font.size = Pt(14)
+        set_ea(ar, "楷体")
+        ap.paragraph_format.space_after = Pt(18)
 
     sub = d.add_paragraph()
     sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
