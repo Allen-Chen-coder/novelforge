@@ -71,6 +71,8 @@ export default function Billing() {
   const [provider, setProvider] = useState<MyProvider | null>(null);
   const [pf, setPf] = useState({ base_url: "https://api.moonshot.cn/v1", api_key: "", model: "kimi-k3", temperature: 0.8, max_tokens: 8192, enabled: true });
   const [pfMsg, setPfMsg] = useState("");
+  const [testMsg, setTestMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [testBusy, setTestBusy] = useState(false);
 
   const load = async () => {
     setCatalog(await api<Catalog>("GET", "/api/catalog"));
@@ -153,6 +155,24 @@ export default function Billing() {
           if (cur.status === "cancelled") { stopPolling(); setPayError("订单已取消"); setQr(null); }
         } catch { /* 网络抖动忽略，下一轮再查 */ }
       }, 2500);
+    }
+  };
+
+  /** 保存前测试 Key 可用性：用表单当前值（Key 留空则沿用已保存的） */
+  const testProvider = async () => {
+    setTestMsg(null);
+    setTestBusy(true);
+    try {
+      const r = await api<{ ok: boolean; latency_ms: number }>("POST", "/api/my-provider/test", {
+        base_url: pf.base_url || undefined,
+        api_key: pf.api_key || undefined,
+        model: pf.model || undefined,
+      });
+      setTestMsg({ ok: true, text: `连接成功 · 延迟 ${r.latency_ms}ms` });
+    } catch (e: any) {
+      setTestMsg({ ok: false, text: e.message });
+    } finally {
+      setTestBusy(false);
     }
   };
 
@@ -400,9 +420,26 @@ export default function Billing() {
                   </div>
                 </div>
                 {pfMsg && <p className="text-sm text-amber-300">{pfMsg}</p>}
+                {testMsg && (
+                  <p className={`text-sm border rounded-lg px-3 py-2 ${testMsg.ok
+                    ? "text-emerald-300 border-emerald-800/60 bg-emerald-950/30"
+                    : "text-red-400 border-red-900/50 bg-red-950/40"}`}>
+                    {testMsg.ok ? "✅ " : "❌ "}{testMsg.text}
+                  </p>
+                )}
                 <div className="flex gap-3">
                   <Button className="bg-amber-500 text-zinc-950 hover:bg-amber-400" onClick={saveProvider}>
                     <Save className="w-4 h-4 mr-1" />保存配置
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="border-zinc-700 text-zinc-200 hover:bg-zinc-800 hover:text-zinc-100"
+                    disabled={testBusy}
+                    onClick={testProvider}
+                    title="用当前填写的配置发起一次最小调用，验证 Key 真实可用"
+                  >
+                    {testBusy ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Zap className="w-4 h-4 mr-1" />}
+                    {testBusy ? "测试中…" : "测试连接"}
                   </Button>
                   {provider?.configured && (
                     <Button variant="outline" className="border-red-800 text-red-400 hover:bg-red-900/20" onClick={removeProvider}>

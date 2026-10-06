@@ -37,6 +37,13 @@ class InviteCreateIn(BaseModel):
     count: int = Field(default=1, ge=1, le=200)   # 一次最多生成 200 个
 
 
+class ProviderTestIn(BaseModel):
+    """测试 API Key 可用性：字段均可选，缺省回退到已保存的配置。"""
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
+    model: Optional[str] = None
+
+
 class ProjectCreateIn(BaseModel):
     name: str = Field(min_length=1, max_length=64)
     idea: str = Field(min_length=4, max_length=2000)

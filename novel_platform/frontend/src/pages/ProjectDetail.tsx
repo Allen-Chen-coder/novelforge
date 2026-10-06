@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import UpgradeNudge from "@/components/UpgradeNudge";
 import QuotaGateDialog, { type GateInfo } from "@/components/QuotaGateDialog";
 import { estimateProjectTokens, estimateBreakdown, formatTokens } from "@/lib/estimate";
-import { ArrowLeft, Download, Loader2, Activity, BookPlus } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Activity, BookPlus, RotateCcw } from "lucide-react";
 
 interface ChapterMeta { idx: number; title: string; summary: string; revise_rounds: number }
 interface Detail {
@@ -72,6 +72,8 @@ export default function ProjectDetail() {
   const [extendBusy, setExtendBusy] = useState(false);
   const [gate, setGate] = useState<GateInfo | null>(null);
   const [extendError, setExtendError] = useState("");
+  const [restartBusy, setRestartBusy] = useState(false);
+  const [restartMsg, setRestartMsg] = useState("");
   const pollRef = useRef<number | null>(null);
   const mainRef = useRef<HTMLElement | null>(null);
   const settledRef = useRef(false); // 工程结算后只刷新一次额度
@@ -170,6 +172,24 @@ export default function ProjectDetail() {
     }
   }, [liveLen]);
 
+  // 失败工程重新开始：断点续跑（已完成章节不重复生成/结算）
+  const restart = async () => {
+    setRestartMsg("");
+    setRestartBusy(true);
+    try {
+      await api("POST", `/api/projects/${id}/restart`);
+      settledRef.current = false;
+      setLiveFeed([]);
+      setLiveTexts({});
+      setLiveTitles({});
+      load(); // 状态已变 queued，重新进入轮询与 SSE
+    } catch (e: any) {
+      setRestartMsg(e.message);
+    } finally {
+      setRestartBusy(false);
+    }
+  };
+
   // 续写：追加 N 章，个人书库保证与前文连贯；完成后自动重新轮询
   const extend = async () => {
     setExtendError("");
@@ -259,7 +279,21 @@ export default function ProjectDetail() {
             </Badge>
           )}
           {detail.status === "done" && <Badge className="bg-emerald-600/90 hover:bg-emerald-600 text-emerald-50">已完成</Badge>}
-          {detail.status === "failed" && <Badge variant="destructive">失败</Badge>}
+          {detail.status === "failed" && (
+            <>
+              <Badge variant="destructive">失败</Badge>
+              <Button
+                size="sm"
+                className="bg-amber-500 text-zinc-950 hover:bg-amber-400 h-7"
+                disabled={restartBusy}
+                onClick={restart}
+                title="断点续跑：已完成章节不重复生成"
+              >
+                {restartBusy ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <RotateCcw className="w-3 h-3 mr-1" />}
+                {restartBusy ? "排队中…" : "重新开始写作"}
+              </Button>
+            </>
+          )}
           <div className="flex-1" />
           {user && (
             <span className="hidden md:inline text-xs text-zinc-500 mr-1 whitespace-nowrap">
@@ -314,8 +348,14 @@ export default function ProjectDetail() {
             </div>
           );
         })()}
-        {detail.status === "failed" && detail.error && (
-          <p className="max-w-7xl mx-auto px-6 pb-3 text-sm text-red-400">{detail.error}</p>
+        {detail.status === "failed" && (detail.error || restartMsg) && (
+          <div className="max-w-7xl mx-auto px-6 pb-3 space-y-1">
+            {detail.error && <p className="text-sm text-red-400">{detail.error}</p>}
+            {restartMsg && <p className="text-sm text-amber-300">{restartMsg}</p>}
+            {detail.error && detail.error.includes("模型配置") && (
+              <p className="text-xs text-zinc-500">提示：到「额度中心 → 自有 API」修正 API Key 后，点上方「重新开始写作」即可断点续跑，已完成章节不会重复生成。</p>
+            )}
+          </div>
         )}
       </header>
 

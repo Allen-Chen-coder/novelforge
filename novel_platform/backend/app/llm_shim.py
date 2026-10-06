@@ -106,3 +106,42 @@ def build_role_router(
         if role in ROLES:
             role_llms[role] = _build_from_row(row, meter)
     return default_client, role_llms, byok
+
+
+# --------------------------------------------------------------------- #
+# API Key 连通性测试：最小代价调用一次（max_tokens=1），用于保存前的自检
+# --------------------------------------------------------------------- #
+def _friendly_api_error(e: Exception) -> str:
+    import openai
+
+    status = getattr(e, "status_code", None) or ""
+    if isinstance(e, openai.AuthenticationError) or status == 401:
+        return "API Key 无效或已失效（服务商返回 401 鉴权失败）"
+    if isinstance(e, openai.NotFoundError) or status == 404:
+        return "接口地址或模型名不正确（404）：检查 Base URL 是否含 /v1 后缀、模型 ID 是否存在"
+    if isinstance(e, openai.APIConnectionError):
+        return f"无法连接接口地址：{e}"
+    if isinstance(e, openai.RateLimitError) or status == 429:
+        return "Key 有效，但当前触发服务商限流（429），稍后重试即可"
+    if isinstance(e, openai.PermissionDeniedError) or status == 403:
+        return "Key 有效但无该模型权限（403）：检查服务商控制台是否开通此模型"
+    return f"调用失败：{type(e).__name__}: {str(e)[:200]}"
+
+
+def test_provider(base_url: str, api_key: str, model: str) -> dict:
+    """返回 {"ok": True, "latency_ms": n} 或 {"ok": False, "error": 友好描述}。"""
+    import time
+
+    import openai
+
+    client = openai.OpenAI(api_key=api_key, base_url=base_url, timeout=60, max_retries=0)
+    t0 = time.time()
+    try:
+        client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": "ping"}],
+            max_tokens=1,
+        )
+    except Exception as e:
+        return {"ok": False, "error": _friendly_api_error(e)}
+    return {"ok": True, "latency_ms": int((time.time() - t0) * 1000)}

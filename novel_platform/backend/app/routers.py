@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 
-from . import auth, db, security, sms
+from . import auth, db, llm_shim, security, sms
 from .auth import CurrentUser, get_current_user, require_admin
 from .catalog import CATALOG, PACKS, PLANS
 from .runner import submit
@@ -24,6 +24,7 @@ from .schemas import (
     ProjectCreateIn,
     ProjectExtendIn,
     ProviderIn,
+    ProviderTestIn,
     ROLES,
     RegisterIn,
     SmsSendIn,
@@ -235,6 +236,37 @@ def extend_project(pid: int, body: ProjectExtendIn, user: CurrentUser = Depends(
     db.execute(
         "UPDATE projects SET target_chapters=target_chapters+?, status='queued', progress_msg='', error=NULL, finished_at=NULL WHERE id=?",
         (body.chapters, pid),
+    )
+    submit(pid)
+    return _project_brief(dict(db.q_one("SELECT * FROM projects WHERE id=?", (pid,))))
+
+
+@router.post("/projects/{pid}/restart")
+def restart_project(pid: int, user: CurrentUser = Depends(get_current_user)):
+    """失败工程重新开始：断点续跑，已完成章节不重复生成、不重复结算。
+
+    典型场景：API Key 配置错误导致失败 → 修正 Key 后一键重开。
+    """
+    proj = _own_project(pid, user)
+    if proj["status"] != "failed":
+        raise HTTPException(400, "只有失败的工程才能重新开始")
+    running = db.q_one(
+        "SELECT COUNT(*) AS c FROM projects WHERE user_id=? AND status IN ('queued','running')",
+        (user["id"],),
+    )["c"]
+    if running >= 2:
+        raise HTTPException(429, "同时进行的工程最多 2 个，请等待完成后再重试")
+    byok = _has_byok(user["id"])
+    if not byok:
+        remaining = max(0, user["plan_chapters"] - user["used_chapters"]) + user["extra_chapters"]
+        unfinished = max(0, proj["target_chapters"] - proj["chapters_done"])
+        if unfinished > remaining:
+            raise HTTPException(
+                403, f"额度不足：剩余 {remaining} 章，本工程还差 {unfinished} 章未生成，可到「额度中心」升级套餐或购买加油包"
+            )
+    db.execute(
+        "UPDATE projects SET status='queued', progress_msg='重新开始排队…', error=NULL, finished_at=NULL WHERE id=?",
+        (pid,),
     )
     submit(pid)
     return _project_brief(dict(db.q_one("SELECT * FROM projects WHERE id=?", (pid,))))
@@ -590,6 +622,24 @@ def put_my_provider(body: MyProviderIn, user: CurrentUser = Depends(get_current_
 def delete_my_provider(user: CurrentUser = Depends(get_current_user)):
     db.execute("DELETE FROM user_provider WHERE user_id=?", (user["id"],))
     return {"ok": True}
+
+
+@router.post("/my-provider/test")
+def test_my_provider(body: ProviderTestIn, user: CurrentUser = Depends(get_current_user)):
+    """保存前自检：用表单值（或已保存配置）发起一次最小调用验证 Key 可用性。"""
+    row = db.q_one("SELECT * FROM user_provider WHERE user_id=?", (user["id"],))
+    base_url = (body.base_url or (row["base_url"] if row else "") or "").strip()
+    model = (body.model or (row["model"] if row else "") or "").strip()
+    api_key = (body.api_key or "").strip()
+    if not api_key and row:
+        api_key = security.decrypt(row["api_key_enc"])  # 表单留空则沿用已保存的 Key
+    missing = [n for n, v in (("API 地址", base_url), ("模型", model), ("API Key", api_key)) if not v]
+    if missing:
+        raise HTTPException(400, f"请先填写：{'、'.join(missing)}")
+    r = llm_shim.test_provider(base_url, api_key, model)
+    if not r["ok"]:
+        raise HTTPException(400, r["error"])
+    return r
 
 
 # --------------------------------------------------------------------- #
