@@ -277,6 +277,8 @@ export default function AdminPage() {
   const [usage, setUsage] = useState<Usage | null>(null);
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [routes, setRoutes] = useState<ModelRoute[]>([]);
+  const [payOn, setPayOn] = useState(true);
+  const [payOnLoading, setPayOnLoading] = useState(false);
 
   const loadProvider = async () => {
     const p = await api<ProviderCfg>("GET", "/api/admin/provider");
@@ -288,10 +290,23 @@ export default function AdminPage() {
   const loadUsers = async () => setUsers(await api<AdminUser[]>("GET", "/api/admin/users"));
   const loadUsage = async () => setUsage(await api<Usage>("GET", "/api/admin/usage"));
   const loadOrders = async () => setOrders(await api<AdminOrder[]>("GET", "/api/admin/orders"));
+  const loadSettings = async () => {
+    const s = await api<{ payments_enabled: boolean }>("GET", "/api/admin/settings");
+    setPayOn(s.payments_enabled);
+  };
+  const togglePayments = async (on: boolean) => {
+    setPayOnLoading(true);
+    try {
+      await api("POST", "/api/admin/settings", { payments_enabled: on });
+      setPayOn(on);
+    } finally {
+      setPayOnLoading(false);
+    }
+  };
   const loadRoutes = async () => setRoutes(await api<ModelRoute[]>("GET", "/api/admin/model-routes"));
 
   useEffect(() => {
-    loadProvider(); loadUsers(); loadUsage(); loadOrders(); loadRoutes();
+    loadProvider(); loadUsers(); loadUsage(); loadOrders(); loadRoutes(); loadSettings();
     const t = setInterval(() => { loadUsers(); loadUsage(); loadOrders(); }, 8000);
     return () => clearInterval(t);
   }, []);
@@ -480,6 +495,20 @@ export default function AdminPage() {
 
           {/* ---------- 订单管理 ---------- */}
           <TabsContent value="orders" className="mt-6">
+            <Card className="bg-zinc-900/60 border-zinc-800 mb-6">
+              <CardHeader>
+                <CardTitle className="text-base">付款界面</CardTitle>
+                <CardDescription className="text-zinc-400">
+                  关闭后：用户端隐藏订阅套餐与加油包、无法下单支付，只保留自有 API 免费通道与订单查询。适合内测期或维护期使用。
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex items-center gap-3">
+                <Switch checked={payOn} onCheckedChange={togglePayments} disabled={payOnLoading} />
+                <span className={`text-sm ${payOn ? "text-emerald-400" : "text-zinc-500"}`}>
+                  {payOnLoading ? "切换中…" : payOn ? "已开放付款" : "已关闭付款"}
+                </span>
+              </CardContent>
+            </Card>
             <Card className="bg-zinc-900/60 border-zinc-800">
               <CardHeader>
                 <CardTitle>订单管理</CardTitle>

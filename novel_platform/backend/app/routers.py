@@ -499,9 +499,20 @@ def project_stream(pid: int, token: str = ""):
 # --------------------------------------------------------------------- #
 # 商业化：商品目录 / 订单 / 自有 API（BYOK）
 # --------------------------------------------------------------------- #
+def _get_setting(key: str, default: str = "") -> str:
+    r = db.q_one("SELECT value FROM settings WHERE key=?", (key,))
+    return r["value"] if r else default
+
+
+def _payments_enabled() -> bool:
+    """付款界面总开关：管理员可在后台一键关闭（内测期/维护期只留 BYOK 免费通道）。"""
+    return _get_setting("payments_enabled", "1") == "1"
+
+
 @router.get("/catalog")
 def catalog(user: CurrentUser = Depends(get_current_user)):
     return {
+        "payments_enabled": _payments_enabled(),
         "plans": list(PLANS.values()),
         "packs": list(PACKS.values()),
         "balance": {
@@ -519,6 +530,8 @@ def catalog(user: CurrentUser = Depends(get_current_user)):
 
 @router.post("/orders", status_code=201)
 def create_order(body: OrderCreateIn, user: CurrentUser = Depends(get_current_user)):
+    if not _payments_enabled():
+        raise HTTPException(400, "支付功能暂已关闭")
     item = CATALOG.get(body.product_code)
     if not item:
         raise HTTPException(404, "商品不存在")
@@ -578,6 +591,8 @@ STATIC_QR = {"wechat": "/pay/wechat.png", "alipay": "/pay/alipay.jpg"}
 @router.post("/orders/{oid}/checkout")
 def checkout_order(oid: int, body: CheckoutIn, user: CurrentUser = Depends(get_current_user)):
     """收银台：返回站长个人收款码，用户扫码付款后由管理员在后台核实并确认到账。"""
+    if not _payments_enabled():
+        raise HTTPException(400, "支付功能暂已关闭")
     order = db.q_one("SELECT * FROM orders WHERE id=?", (oid,))
     if not order or order["user_id"] != user["id"]:
         raise HTTPException(404, "订单不存在")
@@ -1026,3 +1041,23 @@ def admin_confirm_order(oid: int, admin: CurrentUser = Depends(require_admin)):
         raise HTTPException(400, "订单已取消，无法确认")
     _mark_paid(oid, f"MANUAL-BY-{admin['username']}")
     return {"ok": True}
+
+
+class SettingsIn(BaseModel):
+    payments_enabled: bool
+
+
+@router.get("/admin/settings")
+def admin_settings(admin: CurrentUser = Depends(require_admin)):
+    return {"payments_enabled": _payments_enabled()}
+
+
+@router.post("/admin/settings")
+def admin_update_settings(body: SettingsIn, admin: CurrentUser = Depends(require_admin)):
+    """站点开关：开放/关闭付款界面。关闭后用户端隐藏套餐与加油包，下单与收银台拒绝。"""
+    db.execute(
+        """INSERT INTO settings(key,value) VALUES('payments_enabled',?)
+           ON CONFLICT(key) DO UPDATE SET value=excluded.value""",
+        ("1" if body.payments_enabled else "0",),
+    )
+    return {"ok": True, "payments_enabled": body.payments_enabled}

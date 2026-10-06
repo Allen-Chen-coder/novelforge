@@ -28,6 +28,7 @@ interface CatalogItem {
 }
 interface Catalog {
   plans: CatalogItem[]; packs: CatalogItem[];
+  payments_enabled: boolean;
   balance: {
     plan: string; plan_name: string; plan_chapters: number; used_chapters: number;
     plan_reset_at: string | null; extra_chapters: number; remaining_chapters: number; byok: boolean;
@@ -51,8 +52,11 @@ export default function Billing() {
   const [searchParams] = useSearchParams();
   // 支持 ?tab=packs|plans|orders|byok 深链（额度不足引导、加油包入口直达）
   const tabParam = searchParams.get("tab") || "";
-  const defaultTab = ["plans", "packs", "orders", "byok"].includes(tabParam) ? tabParam : "plans";
+  const defaultTabRaw = ["plans", "packs", "orders", "byok"].includes(tabParam) ? tabParam : "plans";
   const [catalog, setCatalog] = useState<Catalog | null>(null);
+  // 付款界面总开关：管理员后台控制；catalog 未加载前按开放处理
+  const payOn = catalog ? catalog.payments_enabled !== false : true;
+  const defaultTab = payOn ? defaultTabRaw : "byok";
   const [orders, setOrders] = useState<Order[]>([]);
   const [confirmItem, setConfirmItem] = useState<CatalogItem | null>(null);
   const [busy, setBusy] = useState(false);
@@ -302,24 +306,29 @@ export default function Billing() {
 
         <Tabs defaultValue={defaultTab} key={defaultTab}>
           <TabsList className="bg-zinc-900 border border-zinc-800">
-            <TabsTrigger value="plans"><Crown className="w-4 h-4 mr-1" />订阅套餐</TabsTrigger>
-            <TabsTrigger value="packs"><Coins className="w-4 h-4 mr-1" />加油包</TabsTrigger>
+            {payOn && <TabsTrigger value="plans"><Crown className="w-4 h-4 mr-1" />订阅套餐</TabsTrigger>}
+            {payOn && <TabsTrigger value="packs"><Coins className="w-4 h-4 mr-1" />加油包</TabsTrigger>}
             <TabsTrigger value="orders"><Receipt className="w-4 h-4 mr-1" />我的订单</TabsTrigger>
             <TabsTrigger value="byok"><KeyRound className="w-4 h-4 mr-1" />自有 API</TabsTrigger>
           </TabsList>
+          {!payOn && (
+            <p className="mt-4 text-xs text-amber-200/90 border border-amber-500/30 bg-amber-500/[0.08] rounded-lg px-3.5 py-2.5 leading-relaxed max-w-3xl">
+              当前为免费体验期：接入自有 API Key 即可免费、不限额度生成；付费订阅暂未开放。
+            </p>
+          )}
 
           {/* ---------- 订阅套餐 ---------- */}
-          <TabsContent value="plans" className="mt-6">
+          {payOn && <TabsContent value="plans" className="mt-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {catalog?.plans.map((p, i) => planCard(p, i))}
             </div>
             <p className="text-xs text-zinc-500 mt-4">
               订阅额度当月有效、每月按订阅日自动重置；加油包额度永久有效，套餐额度用完后自动抵扣加油包。
             </p>
-          </TabsContent>
+          </TabsContent>}
 
           {/* ---------- 加油包 ---------- */}
-          <TabsContent value="packs" className="mt-6">
+          {payOn && <TabsContent value="packs" className="mt-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {catalog?.packs.map((p, i) => (
                 <SpotlightCard key={p.code}
@@ -339,7 +348,7 @@ export default function Billing() {
                 </SpotlightCard>
               ))}
             </div>
-          </TabsContent>
+          </TabsContent>}
 
           {/* ---------- 我的订单 ---------- */}
           <TabsContent value="orders" className="mt-6">
@@ -365,11 +374,12 @@ export default function Billing() {
                           <TableCell>{statusBadge(o.status)}</TableCell>
                           <TableCell className="text-zinc-500 text-sm">{o.created_at}</TableCell>
                           <TableCell>
-                            {o.status === "pending" && (
+                            {o.status === "pending" && payOn && (
                               <Button size="sm" variant="outline" className="border-amber-600 text-amber-400 hover:bg-amber-600/10" disabled={busy} onClick={() => payOrder(o)}>
                                 去支付
                               </Button>
                             )}
+                            {o.status === "pending" && !payOn && <span className="text-xs text-zinc-500">支付暂未开放</span>}
                             {o.status === "paid" && o.paid_at && <span className="text-xs text-zinc-500">{o.paid_at}</span>}
                           </TableCell>
                         </TableRow>

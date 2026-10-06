@@ -157,6 +157,12 @@ CREATE TABLE IF NOT EXISTS invite_codes (
     created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
 CREATE INDEX IF NOT EXISTS idx_invite_used ON invite_codes(used_by);
+
+-- 站点级开关（key-value）
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
 
 # 老库兼容：逐列补齐（已存在则忽略）
