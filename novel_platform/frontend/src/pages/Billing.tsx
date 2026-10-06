@@ -176,6 +176,33 @@ export default function Billing() {
     }
   };
 
+  // 输入后自动检测：Key / 地址 / 模型任一变化，防抖 900ms 自动验证一次
+  const autoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [autoState, setAutoState] = useState<"idle" | "testing" | "ok" | "fail">("idle");
+  const [autoText, setAutoText] = useState("");
+  useEffect(() => {
+    if (autoTimer.current) clearTimeout(autoTimer.current);
+    const key = pf.api_key.trim();
+    if (key.length < 8 || !pf.base_url.trim()) { setAutoState("idle"); setAutoText(""); return; }
+    autoTimer.current = setTimeout(async () => {
+      setAutoState("testing");
+      setAutoText("正在自动检测 Key 可用性…");
+      try {
+        const r = await api<{ ok: boolean; latency_ms: number }>("POST", "/api/my-provider/test", {
+          base_url: pf.base_url || undefined,
+          api_key: pf.api_key || undefined,
+          model: pf.model || undefined,
+        });
+        setAutoState("ok");
+        setAutoText(`Key 可用 · 延迟 ${r.latency_ms}ms`);
+      } catch (e: any) {
+        setAutoState("fail");
+        setAutoText(e.message);
+      }
+    }, 900);
+    return () => { if (autoTimer.current) clearTimeout(autoTimer.current); };
+  }, [pf.api_key, pf.base_url, pf.model]);
+
   const saveProvider = async () => {
     setPfMsg("");
     try {
@@ -394,6 +421,17 @@ export default function Billing() {
                   <div className="space-y-2 col-span-2">
                     <Label>API Key{provider?.configured && "（留空则保持原 Key 不变）"}</Label>
                     <Input type="password" placeholder={provider?.configured ? "已保存，输入以更换" : "sk-xxxxxxxx"} value={pf.api_key} onChange={(e) => setPf({ ...pf, api_key: e.target.value })} className="bg-zinc-950 border-zinc-700" />
+                    {autoState !== "idle" && (
+                      <p className={`text-xs flex items-center gap-1.5 ${
+                        autoState === "testing" ? "text-zinc-400"
+                        : autoState === "ok" ? "text-emerald-400"
+                        : "text-red-400"}`}>
+                        {autoState === "testing" && <Loader2 className="w-3 h-3 animate-spin" />}
+                        {autoState === "ok" && <span>✓</span>}
+                        {autoState === "fail" && <span>✕</span>}
+                        {autoState === "testing" ? "自动检测中…" : autoText}
+                      </p>
+                    )}
                     {presetKeyForBaseUrl(pf.base_url) !== "custom" && (
                       <p className="text-xs text-zinc-500">
                         Key 获取位置：{PROVIDER_PRESETS.find((p) => p.base_url === pf.base_url.trim())?.key_hint}

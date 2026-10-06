@@ -87,6 +87,13 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     key_hint: "cloud.siliconflow.cn → API 密钥",
   },
   {
+    key: "vectrust",
+    name: "Vectrust（多模型聚合）",
+    base_url: "https://api.openai-next.com/v1",
+    model: "gpt-5.5",
+    key_hint: "openai-next.com → 控制台生成 API Key（一个 Key 调用 800+ 模型）",
+  },
+  {
     key: "openrouter",
     name: "OpenRouter（海外模型聚合）",
     base_url: "https://openrouter.ai/api/v1",
