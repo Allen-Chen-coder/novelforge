@@ -21,6 +21,7 @@ from .schemas import (
     ModelRouteIn,
     MyProviderIn,
     OrderCreateIn,
+    ProfileIn,
     ProjectCreateIn,
     ProjectExtendIn,
     ProviderIn,
@@ -130,6 +131,23 @@ def bind_phone(body: BindPhoneIn, user: CurrentUser = Depends(get_current_user))
 @router.get("/auth/me")
 def me(user: CurrentUser = Depends(get_current_user)):
     return _public_user(user)
+
+
+@router.get("/me/profile")
+def get_profile(user: CurrentUser = Depends(get_current_user)):
+    row = db.q_one("SELECT pen_name, author_bio FROM users WHERE id=?", (user["id"],))
+    return {"pen_name": row["pen_name"] or "", "bio": row["author_bio"] or ""}
+
+
+@router.put("/me/profile")
+def put_profile(body: ProfileIn, user: CurrentUser = Depends(get_current_user)):
+    pen = (body.pen_name or "").strip()[:30]
+    bio = (body.bio or "").strip()[:500]
+    db.execute(
+        "UPDATE users SET pen_name=?, author_bio=? WHERE id=?",
+        (pen or None, bio or None, user["id"]),
+    )
+    return {"ok": True, "pen_name": pen, "bio": bio}
 
 
 # --------------------------------------------------------------------- #
@@ -377,25 +395,35 @@ def _attachment(filename: str, media_type: str, content: bytes) -> Response:
     )
 
 
+def _export_author(pid: int, user: CurrentUser, author: Optional[str]) -> tuple[str, str]:
+    """署名与简介：URL 显式指定优先，否则回落到用户资料里的作者资料。"""
+    if author is not None:
+        return author.strip()[:30], ""
+    row = db.q_one("SELECT pen_name, author_bio FROM users WHERE id=?", (user["id"],))
+    return (row["pen_name"] or ""), (row["author_bio"] or "")
+
+
 @router.get("/projects/{pid}/export.pdf")
-def export_pdf(pid: int, author: str = "", user: CurrentUser = Depends(get_current_user)):
+def export_pdf(pid: int, author: Optional[str] = None, user: CurrentUser = Depends(get_current_user)):
     name, chapters = _export_chapters(pid, user)
     from . import exporters
 
+    pen, bio = _export_author(pid, user, author)
     try:
-        data = exporters.build_pdf(name, chapters, author=author.strip()[:30])
+        data = exporters.build_pdf(name, chapters, author=pen, bio=bio)
     except ImportError:
         raise HTTPException(500, "PDF 组件未安装，请联系管理员")
     return _attachment(f"{name}.pdf", "application/pdf", data)
 
 
 @router.get("/projects/{pid}/export.docx")
-def export_docx(pid: int, author: str = "", user: CurrentUser = Depends(get_current_user)):
+def export_docx(pid: int, author: Optional[str] = None, user: CurrentUser = Depends(get_current_user)):
     name, chapters = _export_chapters(pid, user)
     from . import exporters
 
+    pen, bio = _export_author(pid, user, author)
     try:
-        data = exporters.build_docx(name, chapters, author=author.strip()[:30])
+        data = exporters.build_docx(name, chapters, author=pen, bio=bio)
     except ImportError:
         raise HTTPException(500, "Word 组件未安装，请联系管理员")
     return _attachment(

@@ -92,3 +92,9 @@ class ModelRouteIn(BaseModel):
     temperature: float = 0.8
     max_tokens: int = 8192
     enabled: bool = True
+
+
+class ProfileIn(BaseModel):
+    """作者资料：导出封面署名与作品简介。"""
+    pen_name: Optional[str] = Field(default=None, max_length=30)
+    bio: Optional[str] = Field(default=None, max_length=500)

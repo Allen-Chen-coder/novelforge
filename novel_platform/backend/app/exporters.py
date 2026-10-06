@@ -33,7 +33,7 @@ def _meta(chapters: list[dict]) -> dict:
 # --------------------------------------------------------------------- #
 # PDF：reportlab 排版，内置 STSong-Light CID 字体，无需字体文件
 # --------------------------------------------------------------------- #
-def build_pdf(book_name: str, chapters: list[dict], author: str = "") -> bytes:
+def build_pdf(book_name: str, chapters: list[dict], author: str = "", bio: str = "") -> bytes:
     from io import BytesIO
 
     from reportlab.lib.colors import HexColor
@@ -110,6 +110,10 @@ def build_pdf(book_name: str, chapters: list[dict], author: str = "") -> bytes:
         "chapter", fontName=FONT, fontSize=17, leading=26,
         textColor=INK, spaceBefore=4 * mm, spaceAfter=2 * mm,
     )
+    bio_head_style = ParagraphStyle(
+        "biohead", fontName=FONT, fontSize=15, leading=24,
+        textColor=INK, spaceAfter=4 * mm,
+    )
     body_style = ParagraphStyle(
         "body", fontName=FONT, fontSize=11.5, leading=21,
         textColor=INK, firstLineIndent=23, spaceAfter=2.2 * mm,
@@ -137,6 +141,26 @@ def build_pdf(book_name: str, chapters: list[dict], author: str = "") -> bytes:
         PageBreak(),
     ]
 
+    if bio:
+        story += [
+            Spacer(1, 1.5 * cm),
+            Paragraph("内容简介", bio_head_style),
+            HRFlowable(width="100%", thickness=0.6, color=HexColor("#d6d3d1"),
+                       spaceBefore=1 * mm, spaceAfter=4 * mm),
+        ]
+        for para in _split_paragraphs(bio):
+            safe = para.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            story.append(Paragraph(safe.replace("\n", "<br/>"), body_style))
+        story += [
+            Spacer(1, 1.2 * cm),
+            Paragraph(
+                f"© {datetime.now().year} {author or '本书作者'}。本书内容由 AI 辅助生成，版权归作者所有，转载请注明出处。",
+                ParagraphStyle("copyright", fontName=FONT, fontSize=9, leading=16,
+                               textColor=GREY),
+            ),
+            PageBreak(),
+        ]
+
     for c in chapters:
         story.append(Paragraph(f"第{c['idx']}章　{c['title']}", chapter_style))
         story.append(
@@ -155,7 +179,7 @@ def build_pdf(book_name: str, chapters: list[dict], author: str = "") -> bytes:
 # --------------------------------------------------------------------- #
 # Word：python-docx，正文宋体小四、1.5 倍行距、首行缩进两字符
 # --------------------------------------------------------------------- #
-def build_docx(book_name: str, chapters: list[dict], author: str = "") -> bytes:
+def build_docx(book_name: str, chapters: list[dict], author: str = "", bio: str = "") -> bytes:
     from io import BytesIO
 
     import docx
@@ -203,6 +227,32 @@ def build_docx(book_name: str, chapters: list[dict], author: str = "") -> bytes:
     r.font.size = Pt(11)
     r.font.color.rgb = RGBColor(0x78, 0x71, 0x6C)
     set_ea(r)
+
+    if bio:
+        d.add_page_break()
+        bh = d.add_paragraph()
+        br = bh.add_run("内容简介")
+        br.font.size = Pt(15)
+        br.font.bold = True
+        set_ea(br, "黑体")
+        bh.paragraph_format.space_after = Pt(10)
+        for para in _split_paragraphs(bio):
+            p = d.add_paragraph()
+            p.paragraph_format.line_spacing_rule = WD_LINE_SPACING.ONE_POINT_FIVE
+            p.paragraph_format.first_line_indent = Pt(24)
+            p.paragraph_format.space_after = Pt(4)
+            r = p.add_run(para)
+            r.font.size = Pt(12)
+            set_ea(r)
+        cp = d.add_paragraph()
+        cp.paragraph_format.space_before = Pt(24)
+        cr = cp.add_run(
+            f"© {datetime.now().year} {author or '本书作者'}。"
+            "本书内容由 AI 辅助生成，版权归作者所有，转载请注明出处。"
+        )
+        cr.font.size = Pt(9)
+        cr.font.color.rgb = RGBColor(0x78, 0x71, 0x6C)
+        set_ea(cr)
 
     for c in chapters:
         d.add_page_break()

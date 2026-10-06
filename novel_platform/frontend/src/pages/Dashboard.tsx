@@ -55,6 +55,36 @@ export default function Dashboard() {
   // 额度不足拦截弹窗（最短付费路径：加油包 / 升级套餐）
   const [gate, setGate] = useState<GateInfo | null>(null);
 
+  // 作者资料：导出封面署名与作品简介
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profile, setProfile] = useState({ pen_name: "", bio: "" });
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [profileMsg, setProfileMsg] = useState("");
+
+  const loadProfile = useCallback(async () => {
+    try {
+      setProfile(await api<{ pen_name: string; bio: string }>("GET", "/api/me/profile"));
+    } catch { /* 未登录时忽略 */ }
+  }, []);
+
+  useEffect(() => { loadProfile(); }, [loadProfile]);
+
+  const saveProfile = async () => {
+    setProfileBusy(true);
+    setProfileMsg("");
+    try {
+      await api("PUT", "/api/me/profile", {
+        pen_name: profile.pen_name.trim(),
+        bio: profile.bio.trim(),
+      });
+      setProfileMsg("已保存。之后导出 PDF/Word 会自动带上署名与简介。");
+    } catch (e: any) {
+      setProfileMsg(e.message);
+    } finally {
+      setProfileBusy(false);
+    }
+  };
+
   const load = useCallback(async () => {
     setProjects(await api<Project[]>("GET", "/api/projects"));
   }, []);
@@ -142,6 +172,10 @@ export default function Dashboard() {
             <Button variant="outline" size="sm" onClick={() => nav("/billing")}
               className="border-zinc-800 bg-white/[0.03] hover:bg-white/[0.07] hover:border-amber-500/40 active:scale-[0.97] transition-all duration-300 ease-fluid">
               <Coins className="w-4 h-4 mr-1 text-amber-400" /> 额度中心
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => { setProfileMsg(""); setProfileOpen(true); }}
+              className="border-zinc-800 bg-white/[0.03] hover:bg-white/[0.07] hover:border-amber-500/40 active:scale-[0.97] transition-all duration-300 ease-fluid">
+              <PenLine className="w-4 h-4 mr-1 text-violet-400" /> 作者资料
             </Button>
             {user?.is_admin && (
               <Button variant="outline" size="sm" onClick={() => nav("/admin")}
@@ -362,6 +396,48 @@ export default function Dashboard() {
       </main>
 
       {/* 额度不足拦截弹窗：最短付费路径 */}
+      {/* 作者资料：导出署名与作品简介（服务器存储，全设备同步） */}
+      <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
+        <DialogContent className="bg-zinc-900 border-zinc-800 text-zinc-100 sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>作者资料</DialogTitle>
+            <DialogDescription className="text-zinc-400 leading-relaxed">
+              保存后，导出 PDF / Word 时自动在封面署名，并附「内容简介 + 版权声明」页。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>笔名</Label>
+              <Input value={profile.pen_name} maxLength={30}
+                onChange={(e) => setProfile({ ...profile, pen_name: e.target.value })}
+                placeholder="例如：青衫烟雨"
+                className="bg-zinc-950/80 border-zinc-800 focus-visible:ring-amber-500/40" />
+            </div>
+            <div className="space-y-2">
+              <Label>作品简介（可选，会印在导出文件的简介页）</Label>
+              <Textarea value={profile.bio} maxLength={500} rows={4}
+                onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
+                placeholder="一句话钩子 + 故事看点，让读者第一眼就想读……"
+                className="bg-zinc-950/80 border-zinc-800 focus-visible:ring-amber-500/40 resize-none" />
+              <p className="text-xs text-zinc-600 text-right tnum">{profile.bio.length}/500</p>
+            </div>
+            {profileMsg && (
+              <p className={`text-sm border rounded-lg px-3 py-2 ${profileMsg.includes("已保存") || profileMsg.includes("自动")
+                ? "text-emerald-300 border-emerald-800/60 bg-emerald-950/30"
+                : "text-red-400 border-red-900/50 bg-red-950/40"}`}>{profileMsg}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setProfileOpen(false)} className="text-zinc-500 hover:text-zinc-300">关闭</Button>
+            <Button onClick={saveProfile} disabled={profileBusy}
+              className="bg-amber-500 text-zinc-950 hover:bg-amber-400 active:scale-[0.97] transition-all duration-300 ease-fluid font-semibold">
+              {profileBusy ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <PenLine className="w-4 h-4 mr-1" />}
+              {profileBusy ? "保存中…" : "保存资料"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <QuotaGateDialog open={!!gate} onOpenChange={(v) => { if (!v) setGate(null); }} info={gate} />
 
       {/* 摸鱼坞：生成等得无聊时随时打开，本地小游戏不耗额度 */}

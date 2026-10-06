@@ -272,9 +272,18 @@ export default function ProjectDetail() {
     URL.revokeObjectURL(a.href);
   };
 
-  // 导出署名：选 PDF/Word 时先询问笔名，本地记忆
+  // 导出署名：选 PDF/Word 时先询问笔名；默认取服务器作者资料，本机输入作为覆盖
   const [exportFmt, setExportFmt] = useState<"pdf" | "docx" | null>(null);
   const [authorName, setAuthorName] = useState(() => localStorage.getItem("nvf_author") || "");
+
+  useEffect(() => {
+    api<{ pen_name: string; bio: string }>("GET", "/api/me/profile")
+      .then((p) => {
+        if (p.pen_name) setAuthorName(p.pen_name);
+        else if (p.pen_name === "" && !localStorage.getItem("nvf_author")) setAuthorName("");
+      })
+      .catch(() => { /* 未登录忽略 */ });
+  }, []);
 
   const confirmExport = async () => {
     if (!exportFmt) return;
@@ -620,7 +629,7 @@ export default function ProjectDetail() {
           <DialogHeader>
             <DialogTitle>导出《{detail.name}》</DialogTitle>
             <DialogDescription className="text-zinc-400 leading-relaxed">
-              署名将印在{exportFmt === "pdf" ? " PDF 封面" : " Word 封面"}书名下方，留空则不显示。
+              已自动填入你的作者资料，可为本书临时改署名；留空则不显示。填写「内容简介」请到首页「作者资料」。
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">

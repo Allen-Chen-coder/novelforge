@@ -170,6 +170,8 @@ _ENSURE_COLUMNS = [
     ("orders", "channel", "TEXT NOT NULL DEFAULT 'mock'"),
     ("orders", "trade_no", "TEXT"),
     ("projects", "target_words", "INTEGER NOT NULL DEFAULT 3000"),
+    ("users", "pen_name", "TEXT"),
+    ("users", "author_bio", "TEXT"),
 ]
 
 
