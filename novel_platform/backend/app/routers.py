@@ -45,7 +45,8 @@ def _has_byok(user_id: int) -> bool:
 
 
 def _public_user(u: CurrentUser) -> dict:
-    plan_month = max(0, u["plan_chapters"] - u["used_chapters"])
+    eff = _eff_plan_chapters(u)
+    plan_month = max(0, eff - u["used_chapters"])
     return {
         "id": u["id"],
         "username": u["username"],
@@ -54,7 +55,7 @@ def _public_user(u: CurrentUser) -> dict:
         "used_chapters": u["used_chapters"],
         "plan": u["plan"],
         "plan_name": PLANS.get(u["plan"], PLANS["free"])["name"],
-        "plan_chapters": u["plan_chapters"],
+        "plan_chapters": eff,
         "plan_reset_at": u["plan_reset_at"],
         "extra_chapters": u["extra_chapters"],
         "remaining_chapters": plan_month + u["extra_chapters"],
@@ -194,7 +195,7 @@ def create_project(body: ProjectCreateIn, user: CurrentUser = Depends(get_curren
         raise HTTPException(429, "同时进行的工程最多 2 个，请等待完成后再新建")
     byok = _has_byok(user["id"])
     if not byok:
-        remaining = max(0, user["plan_chapters"] - user["used_chapters"]) + user["extra_chapters"]
+        remaining = max(0, _eff_plan_chapters(user) - user["used_chapters"]) + user["extra_chapters"]
         if body.target_chapters > remaining:
             raise HTTPException(
                 403, f"额度不足：剩余 {remaining} 章，本工程需要 {body.target_chapters} 章，可到「额度中心」升级套餐或购买加油包"
@@ -223,7 +224,7 @@ def extend_project(pid: int, body: ProjectExtendIn, user: CurrentUser = Depends(
         raise HTTPException(429, "同时进行的工程最多 2 个，请等待完成后再续写")
     byok = _has_byok(user["id"])
     if not byok:
-        remaining = max(0, user["plan_chapters"] - user["used_chapters"]) + user["extra_chapters"]
+        remaining = max(0, _eff_plan_chapters(user) - user["used_chapters"]) + user["extra_chapters"]
         if body.chapters > remaining:
             raise HTTPException(
                 403, f"额度不足：剩余 {remaining} 章，本次续写需要 {body.chapters} 章，可到「额度中心」升级套餐或购买加油包"
@@ -282,7 +283,7 @@ def restart_project(pid: int, user: CurrentUser = Depends(get_current_user)):
         raise HTTPException(429, "同时进行的工程最多 2 个，请等待完成后再重试")
     byok = _has_byok(user["id"])
     if not byok:
-        remaining = max(0, user["plan_chapters"] - user["used_chapters"]) + user["extra_chapters"]
+        remaining = max(0, _eff_plan_chapters(user) - user["used_chapters"]) + user["extra_chapters"]
         unfinished = max(0, proj["target_chapters"] - proj["chapters_done"])
         if unfinished > remaining:
             raise HTTPException(
@@ -509,6 +510,24 @@ def _payments_enabled() -> bool:
     return _get_setting("payments_enabled", "1") == "1"
 
 
+def _eff_plan_chapters(u) -> int:
+    """有效月额度：以商品目录为准与存储值取小。
+
+    历史用户的 plan_chapters 可能高于当前套餐配置（定价调整前的旧值），
+    对外展示与扣减一律按目录口径，保证「本月额度」与实际售卖配置一致。
+    """
+    return min(u["plan_chapters"], PLANS.get(u["plan"], PLANS["free"])["chapters"])
+
+
+def _sync_plan_chapters() -> None:
+    """一次性收敛：把存量用户超出目录配置的月额度压回当前档位。"""
+    for code, item in PLANS.items():
+        db.execute(
+            "UPDATE users SET plan_chapters=? WHERE plan=? AND plan_chapters>?",
+            (item["chapters"], code, item["chapters"]),
+        )
+
+
 @router.get("/catalog")
 def catalog(user: CurrentUser = Depends(get_current_user)):
     return {
@@ -518,11 +537,11 @@ def catalog(user: CurrentUser = Depends(get_current_user)):
         "balance": {
             "plan": user["plan"],
             "plan_name": PLANS.get(user["plan"], PLANS["free"])["name"],
-            "plan_chapters": user["plan_chapters"],
+            "plan_chapters": _eff_plan_chapters(user),
             "used_chapters": user["used_chapters"],
             "plan_reset_at": user["plan_reset_at"],
             "extra_chapters": user["extra_chapters"],
-            "remaining_chapters": max(0, user["plan_chapters"] - user["used_chapters"]) + user["extra_chapters"],
+            "remaining_chapters": max(0, _eff_plan_chapters(user) - user["used_chapters"]) + user["extra_chapters"],
             "byok": _has_byok(user["id"]),
         },
     }
@@ -903,7 +922,7 @@ def list_users(admin: CurrentUser = Depends(require_admin)):
             "quota_chapters": r["quota_chapters"],
             "used_chapters": r["used_chapters"],
             "plan": r["plan"],
-            "plan_chapters": r["plan_chapters"],
+            "plan_chapters": min(r["plan_chapters"], PLANS.get(r["plan"], PLANS["free"])["chapters"]),
             "extra_chapters": r["extra_chapters"],
             "projects": r["projects"],
             "tokens": r["tokens"],

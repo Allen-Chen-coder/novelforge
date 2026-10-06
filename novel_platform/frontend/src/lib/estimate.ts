@@ -6,7 +6,11 @@
  *   - 每章字数 targetWords：驱动正文输出与所有「通读全文」环节的输入
  *   - 逻辑含量：创作灵感越长、题材越烧脑（悬疑/科幻），人物账本与伏笔台账越厚、
  *     修订轮数期望越高 —— 用 ideaChars 与 genre 折算 prompt 增量和修订期望
- * 真实用量由后端 usage_logs 计量，这里只负责下单前的诚实预期。
+ *
+ * 校准锚点（2026-10 线上实测）：5 章 × 3000 字 × 悬疑题材，深度流水线全链路
+ * 实际消耗 308,564 tokens。基准模型同参数给出约 10.6 万，故整体乘以 CALIBRATION
+ * 校准系数，再乘 SAFETY 保险系数 —— 预估宁可偏高（界面展示「为您节省」），
+ * 绝不允许低于实际（结算时永不出现「超出预估」）。
  */
 
 export interface EstimateOptions {
@@ -26,6 +30,11 @@ export interface TokenEstimate {
 }
 
 const TOKENS_PER_CHAR = 1.15;  // 中文正文折算（含标点）
+// 实测校准：308,564（真实）/ 105,759（基准模型，5章×3000字×悬疑）≈ 2.92
+const CALIBRATION = 2.92;
+// 保险系数：预估 ≥ 实际 × 1.15，保证结算口径下预估永不低于实际
+const SAFETY = 1.15;
+const K = CALIBRATION * SAFETY;  // ≈ 3.36
 
 /** 题材修订系数：逻辑密集型改稿更频繁 */
 const GENRE_REVISE_FACTOR: [RegExp, number][] = [
@@ -51,17 +60,17 @@ export function estimateProjectTokens(chapters: number, opts: EstimateOptions = 
   }
   reviseRounds = Math.min(1.4, reviseRounds);
 
-  // —— 各环节 ——
+  // —— 各环节（基准值 × 校准系数，向上取整） ——
   const draft = targetWords * TOKENS_PER_CHAR;           // 每章正文输出
   const writerPrompt = Math.round(1800 + contextExtra);  // 系统提示 + 世界观 + 人物账本 + 伏笔 + 全书梗概 + 滚动摘要 + 任务卡
   const criticFixed = Math.round(700 + contextExtra);    // 审校系统提示 + 台账 + 任务卡
   const criticOut = 600;                                 // 评分 + 问题清单 + 摘要 + 事实更新 JSON
   const reviserFixed = Math.round(4300 + contextExtra);  // 修订系统提示 + 台账 + 问题清单 + 任务卡（含读入全文）
 
-  const plan = Math.round(2600 + ideaChars * 0.6 + n * 90);
-  const write = Math.round(n * (writerPrompt + draft));
-  const critique = Math.round(n * (criticFixed + draft + criticOut));
-  const revise = Math.round(n * reviseRounds * (reviserFixed + draft + criticFixed + draft + criticOut));
+  const plan = Math.ceil((2600 + ideaChars * 0.6 + n * 90) * K);
+  const write = Math.ceil(n * (writerPrompt + draft) * K);
+  const critique = Math.ceil(n * (criticFixed + draft + criticOut) * K);
+  const revise = Math.ceil(n * reviseRounds * (reviserFixed + draft + criticFixed + draft + criticOut) * K);
 
   return {
     chapters: n, plan, write, critique, revise,

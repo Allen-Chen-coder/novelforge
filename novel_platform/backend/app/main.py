@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 
 from . import auth, db
 from .runner import start as start_runner
-from .routers import router
+from .routers import router, _sync_plan_chapters
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -36,6 +36,7 @@ def create_app() -> FastAPI:
     def _startup() -> None:
         db.init_db()
         auth.seed_admin()
+        _sync_plan_chapters()
         start_runner()
 
     app.include_router(router)

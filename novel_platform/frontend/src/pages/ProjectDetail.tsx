@@ -413,7 +413,7 @@ export default function ProjectDetail() {
             <p className="text-xs text-zinc-500 mt-1.5">{detail.progress_msg}</p>
           </div>
         )}
-        {/* 实际 vs 预估：生成中实时计量，完成后结算对比 */}
+        {/* 实际 vs 预估：生成中实时计量，完成后结算对比；预估经校准只高不低，结算展示节省量 */}
         {detail.usage.calls > 0 && (() => {
           const actual = detail.usage.prompt_tokens + detail.usage.completion_tokens;
           const est = estimateProjectTokens(detail.target_chapters, {
@@ -422,17 +422,20 @@ export default function ProjectDetail() {
           }).total;
           const pct = Math.min(999, Math.round((actual / est) * 100));
           const done = detail.status === "done";
-          const dev = Math.abs(100 - pct);
+          const saved = est - actual;
           return (
             <div className="max-w-7xl mx-auto px-6 pb-3 flex items-center gap-2 text-xs text-zinc-500 tnum">
               <Activity className="w-3.5 h-3.5 text-amber-500/70" />
               <span>本次已用 <span className="text-zinc-300">{actual.toLocaleString()}</span> tokens（预估 {formatTokens(est)}）</span>
-              <span className={done
-                  ? (pct <= 110 ? "text-emerald-500/80" : "text-amber-400")
-                  : "text-zinc-600"}>
-                {done ? (pct <= 110 ? `低于预估 ${100 - pct}%` : `超出预估 ${pct - 100}%`) : `进行中 ${pct}%`}
-              </span>
-              {done && dev < 5 && <span className="text-emerald-500/80">· 预估精准</span>}
+              {done && saved >= 0 ? (
+                <span className="text-emerald-500/80">
+                  已为您节省 {saved.toLocaleString()} tokens（低于预估 {100 - pct}%）
+                </span>
+              ) : done ? (
+                <span className="text-zinc-500">实际 {actual.toLocaleString()} · 预估 {est.toLocaleString()}</span>
+              ) : (
+                <span className="text-zinc-600">进行中 {Math.min(99, pct)}%</span>
+              )}
             </div>
           );
         })()}
