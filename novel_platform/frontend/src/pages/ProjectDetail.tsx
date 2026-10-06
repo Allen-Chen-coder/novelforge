@@ -30,6 +30,7 @@ interface Detail {
   chapters_done: number; error: string | null;
   chapters: ChapterMeta[];
   usage: { calls: number; prompt_tokens: number; completion_tokens: number };
+  trial?: boolean;
 }
 interface Chapter extends ChapterMeta { text: string; issues: any[] }
 
@@ -549,6 +550,11 @@ export default function ProjectDetail() {
             <article key={current.idx} className="max-w-2xl mx-auto px-8 py-12 animate-slide-in">
               <p className="text-xs tnum tracking-[0.3em] text-amber-500/70 uppercase mb-3">Chapter {String(current.idx).padStart(2, "0")}</p>
               <h2 className="text-2xl md:text-[1.7rem] font-semibold tracking-tight mb-10 leading-snug">{current.title}</h2>
+              {detail.trial && (
+                <p className="mb-10 text-xs text-amber-200/90 border border-amber-500/30 bg-amber-500/[0.08] rounded-lg px-3.5 py-2.5 leading-relaxed">
+                  免费体验版仅生成每章前 1000 字。到「额度中心 → 自有 API」接入自己的 Key（免费、不限额度），或升级套餐解锁完整章节。
+                </p>
+              )}
               {current.text.split("\n").map((para, i) =>
                 para.trim() ? <p key={i} className="mb-6 leading-[1.9] text-zinc-300 indent-8 text-justify">{para}</p> : null
               )}

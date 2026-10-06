@@ -102,6 +102,16 @@ def _run_project(project_id: int) -> None:
         return
     progress_db = _progress_updater(project_id, user_id)
 
+    # 免费版体验装：不充值的章节只生成前 1000 字（剩余不生成，省模型成本），
+    # 并引导接入自有 API 或升级套餐。BYOK 用户走自己的 Key，不受限。
+    u = db.q_one("SELECT plan FROM users WHERE id=?", (user_id,))
+    trial = (not byok) and (u["plan"] == "free")
+    trial_notice = (
+        "\n\n——本章为免费体验版，仅生成前 1000 字（完整版 "
+        f"{row['target_words'] or 3000} 字）。到「额度中心 → 自有 API」接入自己的 Key（免费），"
+        "或升级套餐，即可生成完整章节。"
+    )
+
     def progress(msg: str) -> None:
         # 进度双写：落库（轮询兜底）+ 直播流（弹幕时间线）
         streams.publish(project_id, {"type": "progress", "msg": msg[:200]})
@@ -125,7 +135,8 @@ def _run_project(project_id: int) -> None:
         {
             "rolling_summary_chapters": 5,
             "max_revise_rounds": 2,
-            "target_words": row["target_words"] or 3000,
+            # 免费体验装：每章只生成前 1000 字，剩余部分不生成
+            "target_words": min(row["target_words"] or 3000, 1000) if trial else (row["target_words"] or 3000),
             # 修订验收门：RM 评审判定修订稿未改进则拒收（可用 NOVEL_REWARD_GATE=off 关闭）
             "reward_gate": os.environ.get("NOVEL_REWARD_GATE", "on").lower() not in ("off", "0", "false"),
         },
@@ -155,10 +166,23 @@ def _run_project(project_id: int) -> None:
     preexisting = db.q_one(
         "SELECT COUNT(*) AS c FROM chapters WHERE project_id=?", (project_id,)
     )["c"]
+
+    def _trial_cut(text: str) -> str:
+        """体验装截断：1000 字内找最近句读收尾，附转化提示。"""
+        if len(text) <= 1000:
+            return text
+        head = text[:1000]
+        cut = max(head.rfind("。"), head.rfind("！"), head.rfind("？"),
+                  head.rfind("!"), head.rfind("?"), head.rfind("\n"))
+        return (head[:cut + 1] if cut > 400 else head) + trial_notice
+
     for rec in chapters:
+        text = rec.get("text", "")
+        if trial:
+            text = _trial_cut(text)
         db.execute(
-            """INSERT INTO chapters(project_id,idx,title,text,summary,revise_rounds,issues_json)
-               VALUES(?,?,?,?,?,?,?)
+            """INSERT INTO chapters(project_id,idx,title,text,summary,revise_rounds,issues_json,created_at)
+               VALUES(?,?,?,?,?,?,?,datetime('now','localtime'))
                ON CONFLICT(project_id,idx) DO UPDATE SET
                  title=excluded.title, text=excluded.text, summary=excluded.summary,
                  revise_rounds=excluded.revise_rounds, issues_json=excluded.issues_json""",
@@ -166,7 +190,7 @@ def _run_project(project_id: int) -> None:
                 project_id,
                 rec["index"],
                 rec.get("title", ""),
-                rec.get("text", ""),
+                text,
                 rec.get("summary", ""),
                 rec.get("revise_rounds", 0),
                 json.dumps(rec.get("issues", []), ensure_ascii=False),

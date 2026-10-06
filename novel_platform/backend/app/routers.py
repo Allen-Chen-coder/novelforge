@@ -156,7 +156,11 @@ def put_profile(body: ProfileIn, user: CurrentUser = Depends(get_current_user)):
 @router.get("/projects")
 def list_projects(user: CurrentUser = Depends(get_current_user)):
     rows = db.q(
-        "SELECT * FROM projects WHERE user_id=? ORDER BY id DESC", (user["id"],)
+        """SELECT p.*,
+                  (SELECT MAX(c.created_at) FROM chapters c WHERE c.project_id = p.id) AS updated_at,
+                  (SELECT SUM(LENGTH(COALESCE(c.text, ''))) FROM chapters c WHERE c.project_id = p.id) AS total_words
+           FROM projects p WHERE p.user_id=? ORDER BY p.id DESC""",
+        (user["id"],),
     )
     return [_project_brief(dict(r)) for r in rows]
 
@@ -175,6 +179,8 @@ def _project_brief(r: dict) -> dict:
         "error": r["error"],
         "created_at": r["created_at"],
         "finished_at": r["finished_at"],
+        "updated_at": r.get("updated_at"),
+        "total_words": r.get("total_words") or 0,
     }
 
 
@@ -338,7 +344,8 @@ def project_detail(pid: int, user: CurrentUser = Depends(get_current_user)):
            FROM usage_logs WHERE project_id=?""",
         (pid,),
     )
-    return {**_project_brief(proj), "chapters": [dict(c) for c in chapters], "usage": dict(usage)}
+    trial = (not _has_byok(user["id"])) and user["plan"] == "free"
+    return {**_project_brief(proj), "chapters": [dict(c) for c in chapters], "usage": dict(usage), "trial": trial}
 
 
 @router.get("/projects/{pid}/chapters/{idx}")

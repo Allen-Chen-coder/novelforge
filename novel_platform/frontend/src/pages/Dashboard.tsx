@@ -32,6 +32,8 @@ interface Project {
   chapters_done: number;
   error: string | null;
   created_at: string;
+  updated_at: string | null;
+  total_words: number;
 }
 
 const GENRES = ["男频都市爽文", "女频言情", "玄幻修真", "科幻末世", "悬疑推理", "历史架空", "武侠江湖", "短篇脑洞"];
@@ -376,7 +378,9 @@ export default function Dashboard() {
                     />
                   ) : (
                     <p className="text-xs text-zinc-600 tnum">
-                      {p.genre} ｜ 已更新 {p.chapters_done} 章{p.status === "done" ? " · 连载中" : ` / 本批 ${p.target_chapters} 章`} ｜ {p.created_at.slice(0, 10)}
+                      {p.genre} ｜ 已更新 {p.chapters_done} 章{p.status === "done" ? " · 连载中" : ` / 本批 ${p.target_chapters} 章`}
+                      {p.total_words > 0 && <> ｜ {(p.total_words / 10000).toFixed(1)} 万字</>}
+                      {p.updated_at && <> ｜ 更新于 {p.updated_at.slice(5, 10)}</>}
                     </p>
                   )}
                   {p.status === "failed" && p.error && (

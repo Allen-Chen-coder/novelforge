@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS users (
     quota_chapters INTEGER NOT NULL DEFAULT 100,   -- 历史遗留字段，新逻辑用 plan/extra_chapters
     used_chapters INTEGER NOT NULL DEFAULT 0,
     plan TEXT NOT NULL DEFAULT 'free',
-    plan_chapters INTEGER NOT NULL DEFAULT 20,
+    plan_chapters INTEGER NOT NULL DEFAULT 1,
     plan_reset_at TEXT,                            -- 下次额度重置日期 YYYY-MM-DD
     extra_chapters INTEGER NOT NULL DEFAULT 0,     -- 加油包/管理员手动叠加，永不过期
     created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
@@ -162,7 +162,7 @@ CREATE INDEX IF NOT EXISTS idx_invite_used ON invite_codes(used_by);
 # 老库兼容：逐列补齐（已存在则忽略）
 _ENSURE_COLUMNS = [
     ("users", "plan", "TEXT NOT NULL DEFAULT 'free'"),
-    ("users", "plan_chapters", "INTEGER NOT NULL DEFAULT 20"),
+    ("users", "plan_chapters", "INTEGER NOT NULL DEFAULT 1"),
     ("users", "plan_reset_at", "TEXT"),
     ("users", "extra_chapters", "INTEGER NOT NULL DEFAULT 0"),
     ("users", "phone", "TEXT"),
@@ -172,6 +172,7 @@ _ENSURE_COLUMNS = [
     ("projects", "target_words", "INTEGER NOT NULL DEFAULT 3000"),
     ("users", "pen_name", "TEXT"),
     ("users", "author_bio", "TEXT"),
+    ("chapters", "created_at", "TEXT"),
 ]
 
 
