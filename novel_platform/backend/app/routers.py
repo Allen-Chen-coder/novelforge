@@ -6,7 +6,7 @@ import secrets
 import sqlite3
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 
@@ -349,6 +349,60 @@ def export_md(pid: int, user: CurrentUser = Depends(get_current_user)):
     for r in rows:
         parts += [f"## 第{r['idx']}章 {r['title']}", "", r["text"], ""]
     return "\n".join(parts)
+
+
+def _export_chapters(pid: int, user: CurrentUser) -> tuple[str, list[dict]]:
+    _own_project(pid, user)
+    rows = db.q(
+        "SELECT idx,title,text FROM chapters WHERE project_id=? ORDER BY idx", (pid,)
+    )
+    if not rows:
+        raise HTTPException(400, "还没有可导出的章节")
+    proj = db.q_one("SELECT name FROM projects WHERE id=?", (pid,))
+    return proj["name"], [dict(r) for r in rows]
+
+
+def _attachment(filename: str, media_type: str, content: bytes) -> Response:
+    from urllib.parse import quote
+
+    ascii_name = "novel" + (".pdf" if "pdf" in media_type else ".docx")
+    return Response(
+        content,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename={ascii_name}; filename*=UTF-8''{quote(filename)}"
+            )
+        },
+    )
+
+
+@router.get("/projects/{pid}/export.pdf")
+def export_pdf(pid: int, user: CurrentUser = Depends(get_current_user)):
+    name, chapters = _export_chapters(pid, user)
+    from . import exporters
+
+    try:
+        data = exporters.build_pdf(name, chapters)
+    except ImportError:
+        raise HTTPException(500, "PDF 组件未安装，请联系管理员")
+    return _attachment(f"{name}.pdf", "application/pdf", data)
+
+
+@router.get("/projects/{pid}/export.docx")
+def export_docx(pid: int, user: CurrentUser = Depends(get_current_user)):
+    name, chapters = _export_chapters(pid, user)
+    from . import exporters
+
+    try:
+        data = exporters.build_docx(name, chapters)
+    except ImportError:
+        raise HTTPException(500, "Word 组件未安装，请联系管理员")
+    return _attachment(
+        f"{name}.docx",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        data,
+    )
 
 
 # --------------------------------------------------------------------- #

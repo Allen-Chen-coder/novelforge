@@ -7,6 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -246,6 +254,24 @@ export default function ProjectDetail() {
     a.click();
   };
 
+  /** 二进制格式（PDF/Word）：带鉴权下载后交给浏览器保存 */
+  const exportFile = async (url: string, filename: string) => {
+    const resp = await fetch(apiUrl(url), {
+      headers: getToken() ? { Authorization: `Bearer ${getToken()}` } : {},
+    });
+    if (!resp.ok) {
+      let msg = `导出失败（${resp.status}）`;
+      try { msg = (await resp.json())?.detail || msg; } catch { /* 忽略 */ }
+      throw new Error(msg);
+    }
+    const blob = await resp.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
   if (!detail)
     return (
       <div className="min-h-[100dvh] bg-zinc-950 ink-bg flex items-center justify-center">
@@ -307,10 +333,45 @@ export default function ProjectDetail() {
             </span>
           )}
           {detail.chapters.length > 0 && (
-            <Button size="sm" variant="outline" onClick={exportMd}
-              className="border-zinc-800 bg-white/[0.03] hover:bg-white/[0.07] hover:border-amber-500/40 active:scale-[0.97] transition-all duration-300 ease-fluid">
-              <Download className="w-4 h-4 mr-1" />导出全书
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="outline"
+                  className="border-zinc-800 bg-white/[0.03] hover:bg-white/[0.07] hover:border-amber-500/40 active:scale-[0.97] transition-all duration-300 ease-fluid">
+                  <Download className="w-4 h-4 mr-1" />导出全书
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800 text-zinc-100">
+                <DropdownMenuLabel className="text-zinc-500">选择导出格式</DropdownMenuLabel>
+                <DropdownMenuSeparator className="bg-zinc-800" />
+                <DropdownMenuItem className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer" onSelect={exportMd}>
+                  <Download className="w-4 h-4 mr-2 text-zinc-500" />
+                  <div>
+                    <div>Markdown</div>
+                    <div className="text-xs text-zinc-500">纯文本，适合继续编辑</div>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer"
+                  onSelect={() => exportFile(`/api/projects/${id}/export.pdf`, `${detail.name}.pdf`).catch((e) => alert(e.message))}
+                >
+                  <Download className="w-4 h-4 mr-2 text-amber-500/70" />
+                  <div>
+                    <div>PDF（排版精修）</div>
+                    <div className="text-xs text-zinc-500">封面 + 页码 + 精排段落，适合分享阅读</div>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer"
+                  onSelect={() => exportFile(`/api/projects/${id}/export.docx`, `${detail.name}.docx`).catch((e) => alert(e.message))}
+                >
+                  <Download className="w-4 h-4 mr-2 text-sky-500/70" />
+                  <div>
+                    <div>Word（.docx）</div>
+                    <div className="text-xs text-zinc-500">宋体小四、1.5 倍行距，适合投稿打印</div>
+                  </div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
           {detail.status === "done" && (
             <Button size="sm" onClick={() => setExtendOpen(true)}
