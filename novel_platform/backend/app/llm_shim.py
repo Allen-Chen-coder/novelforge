@@ -125,6 +125,8 @@ def _friendly_api_error(e: Exception) -> str:
         return "Key 有效，但当前触发服务商限流（429），稍后重试即可"
     if isinstance(e, openai.PermissionDeniedError) or status == 403:
         return "Key 有效但无该模型权限（403）：检查服务商控制台是否开通此模型"
+    if isinstance(e, openai.BadRequestError) or status == 400:
+        return "请求被服务商拒绝（400）：检查模型 ID 是否正确、该模型是否支持当前参数"
     return f"调用失败：{type(e).__name__}: {str(e)[:200]}"
 
 
@@ -140,8 +142,15 @@ def test_provider(base_url: str, api_key: str, model: str) -> dict:
         client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": "ping"}],
-            max_tokens=1,
+            max_tokens=16,
         )
+    except openai.BadRequestError as e:
+        # 部分服务商/推理模型会把「测试消息太短、被 max_tokens 截断」当作 400 报错。
+        # 请求已被受理并路由到模型，说明 Key 有效、地址和模型都对——视为成功。
+        msg = str(e).lower()
+        if any(k in msg for k in ("max_tokens", "output limit", "max tokens")):
+            return {"ok": True, "latency_ms": int((time.time() - t0) * 1000)}
+        return {"ok": False, "error": _friendly_api_error(e)}
     except Exception as e:
         return {"ok": False, "error": _friendly_api_error(e)}
     return {"ok": True, "latency_ms": int((time.time() - t0) * 1000)}

@@ -23,6 +23,27 @@ class ProviderConfig:
     api_key: str = field(default="", repr=False)
 
 
+def _non_retryable(e: Exception) -> bool:
+    """401/403/400/404 这类确定性错误重试无意义，直接失败，避免白等退避时间。"""
+    try:
+        import openai
+
+        if isinstance(
+            e,
+            (
+                openai.AuthenticationError,
+                openai.PermissionDeniedError,
+                openai.BadRequestError,
+                openai.NotFoundError,
+            ),
+        ):
+            return True
+    except Exception:
+        pass
+    status = getattr(e, "status_code", None)
+    return status in (400, 401, 403, 404)
+
+
 def load_config(path: str) -> tuple[ProviderConfig, dict]:
     with open(path, "r", encoding="utf-8") as f:
         raw = yaml.safe_load(f) or {}
@@ -82,6 +103,8 @@ class LLMClient:
                 self._report_usage(resp)
                 return resp.choices[0].message.content or ""
             except Exception as e:  # 网络抖动/限流统一退避重试
+                if _non_retryable(e):
+                    raise RuntimeError(f"LLM 调用失败（不可重试）: {e}") from e
                 last_err = e
                 wait = min(2 ** attempt * 2, 30)
                 time.sleep(wait)
@@ -139,15 +162,19 @@ class LLMClient:
                     stream_options={"include_usage": True},
                 )
                 usage_reported = False
+                started = False  # 一旦开始吐字，重试会造成内容重复，直接报错
                 for chunk in resp:
                     if getattr(chunk, "usage", None) and not usage_reported:
                         self._report_usage(chunk)
                         usage_reported = True
                     delta = chunk.choices[0].delta.content if chunk.choices else None
                     if delta:
+                        started = True
                         yield delta
                 return
             except Exception as e:  # 网络抖动/限流统一退避重试
+                if _non_retryable(e) or started:
+                    raise RuntimeError(f"LLM 流式调用失败（不可重试）: {e}") from e
                 last_err = e
                 wait = min(2 ** attempt * 2, 30)
                 time.sleep(wait)
