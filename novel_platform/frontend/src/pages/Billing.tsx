@@ -20,6 +20,8 @@ import {
   Smartphone, MonitorSmartphone,
 } from "lucide-react";
 import SpotlightCard from "@/components/SpotlightCard";
+import { ProviderPresetSelect } from "@/components/ProviderPresetSelect";
+import { PROVIDER_PRESETS, presetKeyForBaseUrl } from "@/lib/providers";
 
 interface CatalogItem {
   code: string; name: string; price_cents: number; chapters: number;
@@ -356,13 +358,27 @@ export default function Billing() {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2 col-span-2">
+                    <Label>选择服务商（自动填入接口地址与推荐模型）</Label>
+                    <ProviderPresetSelect
+                      baseUrl={pf.base_url}
+                      onPick={(preset) =>
+                        setPf((f) => ({ ...f, base_url: preset.base_url, model: preset.model }))
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2 col-span-2">
                     <Label>API Base URL</Label>
                     <Input value={pf.base_url} onChange={(e) => setPf({ ...pf, base_url: e.target.value })} className="bg-zinc-950 border-zinc-700" />
-                    <p className="text-xs text-zinc-500">Kimi: https://api.moonshot.cn/v1 ｜ DeepSeek: https://api.deepseek.com/v1 ｜ 通义: https://dashscope.aliyuncs.com/compatible-mode/v1</p>
+                    <p className="text-xs text-zinc-500">以上选择服务商后自动填入；自定义或微调可直接修改</p>
                   </div>
                   <div className="space-y-2 col-span-2">
                     <Label>API Key{provider?.configured && "（留空则保持原 Key 不变）"}</Label>
                     <Input type="password" placeholder={provider?.configured ? "已保存，输入以更换" : "sk-xxxxxxxx"} value={pf.api_key} onChange={(e) => setPf({ ...pf, api_key: e.target.value })} className="bg-zinc-950 border-zinc-700" />
+                    {presetKeyForBaseUrl(pf.base_url) !== "custom" && (
+                      <p className="text-xs text-zinc-500">
+                        Key 获取位置：{PROVIDER_PRESETS.find((p) => p.base_url === pf.base_url.trim())?.key_hint}
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label>模型</Label>

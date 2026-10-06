@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
 import { ArrowLeft, KeyRound, Users, BarChart3, Save, Receipt, Ban, Network, Ticket } from "lucide-react";
+import { ProviderPresetSelect } from "@/components/ProviderPresetSelect";
 
 interface ProviderCfg {
   configured: boolean;
@@ -94,6 +95,13 @@ function RouteRow({ route, onSaved }: { route: ModelRoute; onSaved: () => void }
         </div>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="space-y-1 col-span-2 md:col-span-5">
+          <Label className="text-xs">选择服务商（自动填入接口地址与推荐模型）</Label>
+          <ProviderPresetSelect
+            baseUrl={form.base_url}
+            onPick={(preset) => setForm((f) => ({ ...f, base_url: preset.base_url, model: preset.model }))}
+          />
+        </div>
         <div className="space-y-1 col-span-2">
           <Label className="text-xs">API Base URL</Label>
           <Input value={form.base_url} onChange={(e) => setForm({ ...form, base_url: e.target.value })} className="bg-zinc-950 border-zinc-700 h-8" />
@@ -357,9 +365,16 @@ export default function AdminPage() {
               <CardContent className="space-y-4 max-w-2xl">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2 col-span-2">
+                    <Label>选择服务商（自动填入接口地址与推荐模型）</Label>
+                    <ProviderPresetSelect
+                      baseUrl={form.base_url}
+                      onPick={(preset) => setForm((f) => ({ ...f, base_url: preset.base_url, model: preset.model }))}
+                    />
+                  </div>
+                  <div className="space-y-2 col-span-2">
                     <Label>API Base URL</Label>
                     <Input value={form.base_url} onChange={(e) => setForm({ ...form, base_url: e.target.value })} className="bg-zinc-950 border-zinc-700" />
-                    <p className="text-xs text-zinc-500">Kimi: https://api.moonshot.cn/v1 ｜ DeepSeek: https://api.deepseek.com/v1 ｜ 通义: https://dashscope.aliyuncs.com/compatible-mode/v1</p>
+                    <p className="text-xs text-zinc-500">选择服务商后自动填入；自定义或微调可直接修改</p>
                   </div>
                   <div className="space-y-2 col-span-2">
                     <Label>API Key（留空则保持原 Key 不变）</Label>
