@@ -568,12 +568,16 @@ def _mark_paid(oid: int, trade_no: str = "") -> None:
 
 
 class CheckoutIn(BaseModel):
-    channel: str = "wechat"   # wechat / alipay（模拟支付通道已下线）
+    channel: str = "wechat"   # wechat / alipay（个人收款码人工核销模式）
+
+
+# 个人收款码（站长静态二维码，由前端 public/pay/ 托管，nginx 直接分发）
+STATIC_QR = {"wechat": "/pay/wechat.png", "alipay": "/pay/alipay.jpg"}
 
 
 @router.post("/orders/{oid}/checkout")
 def checkout_order(oid: int, body: CheckoutIn, user: CurrentUser = Depends(get_current_user)):
-    """收银台：按通道创建支付会话。wechat 返回二维码内容；alipay 返回跳转地址。"""
+    """收银台：返回站长个人收款码，用户扫码付款后由管理员在后台核实并确认到账。"""
     order = db.q_one("SELECT * FROM orders WHERE id=?", (oid,))
     if not order or order["user_id"] != user["id"]:
         raise HTTPException(404, "订单不存在")
@@ -581,24 +585,11 @@ def checkout_order(oid: int, body: CheckoutIn, user: CurrentUser = Depends(get_c
         return {"type": "paid"}
     if order["status"] != "pending":
         raise HTTPException(400, "订单已关闭，无法支付")
-    if body.channel not in ("wechat", "alipay"):
+    if body.channel not in STATIC_QR:
         raise HTTPException(400, "不支持的支付通道")
     db.execute("UPDATE orders SET channel=? WHERE id=?", (body.channel, oid))
-    # 用户显式选择的通道直接调用对应实现（与 PAY_CHANNEL 环境默认无关）
-    from .payments import PaymentError
-    from .payments import alipay as alipay_channel
-    from .payments import wechat as wechat_channel
-
-    try:
-        if body.channel == "wechat":
-            result = wechat_channel.checkout(dict(order), dict(user))
-        else:
-            result = alipay_channel.checkout(dict(order), dict(user))
-    except PaymentError as e:
-        raise HTTPException(400, str(e))
-    except Exception as e:
-        raise HTTPException(502, f"支付通道调用失败：{e}")
-    return {"type": result.type, "url": result.url, "code_url": result.code_url}
+    return {"type": "qrcode_static", "code_url": STATIC_QR[body.channel],
+            "amount_cents": order["amount_cents"]}
 
 
 @router.get("/orders/{oid}")
@@ -1020,4 +1011,18 @@ def admin_cancel_order(oid: int, admin: CurrentUser = Depends(require_admin)):
     db.execute(
         "UPDATE orders SET status='cancelled' WHERE id=? AND status='pending'", (oid,)
     )
+    return {"ok": True}
+
+
+@router.post("/admin/orders/{oid}/confirm")
+def admin_confirm_order(oid: int, admin: CurrentUser = Depends(require_admin)):
+    """核实收款后确认到账：pending → paid 并发放额度（幂等，trade_no 记录操作人）。"""
+    order = db.q_one("SELECT * FROM orders WHERE id=?", (oid,))
+    if not order:
+        raise HTTPException(404, "订单不存在")
+    if order["status"] == "paid":
+        return {"ok": True, "already": True}
+    if order["status"] != "pending":
+        raise HTTPException(400, "订单已取消，无法确认")
+    _mark_paid(oid, f"MANUAL-BY-{admin['username']}")
     return {"ok": True}

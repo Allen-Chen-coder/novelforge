@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Link } from "react-router";
-import QRCode from "qrcode";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -140,13 +139,9 @@ export default function Billing() {
     const r = await api<{ type: string; url?: string; code_url?: string }>(
       "POST", `/api/orders/${order.id}/checkout`, { channel });
     if (r.type === "paid") return onPaid();
-    if (r.type === "redirect" && r.url) {
-      window.location.href = r.url;   // 跳转支付宝收银台
-      return;
-    }
-    if (r.type === "qrcode" && r.code_url) {
-      const dataUrl = await QRCode.toDataURL(r.code_url, { width: 240, margin: 1 });
-      setQr(dataUrl);
+    if (r.type === "qrcode_static" && r.code_url) {
+      // 站长个人收款码：直接展示静态图片，无需生成
+      setQr(r.code_url);
       stopPolling();
       pollRef.current = setInterval(async () => {
         try {
@@ -513,10 +508,16 @@ export default function Billing() {
 
           {qr ? (
             <div className="flex flex-col items-center gap-3 py-2">
-              <img src={qr} alt="微信支付二维码" className="rounded-lg bg-white p-2" />
-              <p className="text-sm text-zinc-400">请使用微信「扫一扫」完成支付</p>
+              <img src={qr} alt="收款二维码" className="rounded-lg bg-white p-2 w-60" />
+              <p className="text-sm text-zinc-300">
+                请使用{channel === "wechat" ? "微信" : "支付宝"}「扫一扫」支付
+                <span className="text-amber-400 font-medium"> {cashierOrder ? fmt(cashierOrder.amount_cents) : ""}</span>
+              </p>
+              <p className="text-xs text-zinc-500">
+                付款时备注订单号 #{cashierOrder?.id}，付款完成后管理员核实即自动到账
+              </p>
               <p className="text-xs text-zinc-500 flex items-center gap-1">
-                <Loader2 className="w-3 h-3 animate-spin" /> 等待支付结果，到账后自动关闭…
+                <Loader2 className="w-3 h-3 animate-spin" /> 等待到账确认，本页会自动刷新…
               </p>
             </div>
           ) : (
@@ -524,8 +525,8 @@ export default function Billing() {
               <div className="space-y-2">
                 <Label>支付方式</Label>
                 {([
-                  { key: "wechat", icon: <Smartphone className="w-4 h-4" />, name: "微信支付", desc: "生成二维码，微信扫码付款" },
-                  { key: "alipay", icon: <MonitorSmartphone className="w-4 h-4" />, name: "支付宝", desc: "跳转到支付宝收银台" },
+                  { key: "wechat", icon: <Smartphone className="w-4 h-4" />, name: "微信支付", desc: "展示站长收款二维码，微信扫码付款" },
+                  { key: "alipay", icon: <MonitorSmartphone className="w-4 h-4" />, name: "支付宝", desc: "展示站长收款二维码，支付宝扫码付款" },
                 ] as const).map((c) => (
                   <button
                     key={c.key}
@@ -544,7 +545,7 @@ export default function Billing() {
                 ))}
               </div>
               <p className="text-xs text-zinc-500">
-                真实收单需站长在服务端配置商户参数（见部署文档 DEPLOY.md）；未配置时支付会失败并提示原因。
+                扫码付款后由管理员核实到账并发放额度，通常几分钟内完成；如需加急请联系站长。
               </p>
               {payError && <p className="text-sm text-red-400">{payError}</p>}
             </>

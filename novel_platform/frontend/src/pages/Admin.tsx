@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
-import { ArrowLeft, KeyRound, Users, BarChart3, Save, Receipt, Ban, Network, Ticket } from "lucide-react";
+import { ArrowLeft, KeyRound, Users, BarChart3, Save, Receipt, Ban, Network, Ticket, CheckCircle2 } from "lucide-react";
 import { ProviderPresetSelect } from "@/components/ProviderPresetSelect";
 
 interface ProviderCfg {
@@ -324,6 +324,11 @@ export default function AdminPage() {
     await loadOrders();
   };
 
+  const confirmOrder = async (oid: number) => {
+    await api("POST", `/api/admin/orders/${oid}/confirm`);
+    await Promise.all([loadOrders(), loadUsers()]);
+  };
+
   const maxDaily = Math.max(1, ...(usage?.daily.map((d) => d.tokens) || [1]));
 
   return (
@@ -478,7 +483,7 @@ export default function AdminPage() {
             <Card className="bg-zinc-900/60 border-zinc-800">
               <CardHeader>
                 <CardTitle>订单管理</CardTitle>
-                <CardDescription className="text-zinc-400">全部用户的订阅与加油包订单。支付状态由微信/支付宝回调驱动；请在服务端配置商户参数后正式收单。</CardDescription>
+                <CardDescription className="text-zinc-400">全部用户的订阅与加油包订单。用户扫码付款到站长个人收款码后，在此核实收款并点「确认到账」，额度自动发放。</CardDescription>
               </CardHeader>
               <CardContent>
                 {orders.length === 0 ? (
@@ -509,9 +514,14 @@ export default function AdminPage() {
                           <TableCell className="text-zinc-500 text-sm">{o.paid_at ?? "—"}</TableCell>
                           <TableCell>
                             {o.status === "pending" && (
-                              <Button size="sm" variant="outline" className="border-red-800 text-red-400 hover:bg-red-900/20" onClick={() => cancelOrder(o.id)}>
-                                <Ban className="w-3 h-3 mr-1" />取消
-                              </Button>
+                              <div className="flex gap-2">
+                                <Button size="sm" className="bg-emerald-600 text-white hover:bg-emerald-500" onClick={() => confirmOrder(o.id)}>
+                                  <CheckCircle2 className="w-3 h-3 mr-1" />确认到账
+                                </Button>
+                                <Button size="sm" variant="outline" className="border-red-800 text-red-400 hover:bg-red-900/20" onClick={() => cancelOrder(o.id)}>
+                                  <Ban className="w-3 h-3 mr-1" />取消
+                                </Button>
+                              </div>
                             )}
                           </TableCell>
                         </TableRow>
