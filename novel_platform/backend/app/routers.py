@@ -205,10 +205,10 @@ def create_project(body: ProjectCreateIn, user: CurrentUser = Depends(get_curren
 
 @router.post("/projects/{pid}/extend", status_code=201)
 def extend_project(pid: int, body: ProjectExtendIn, user: CurrentUser = Depends(get_current_user)):
-    """续写：在已完成工程上追加章节，个人书库（story_bible）保证前后批次连贯。"""
+    """继续更新：在连载中的作品上追加章节，个人书库（story_bible）保证前后批次连贯。"""
     proj = _own_project(pid, user)
     if proj["status"] != "done":
-        raise HTTPException(400, "只有已完成的工程才能续写")
+        raise HTTPException(400, "只有本批次已完成的工程才能继续更新")
     running = db.q_one(
         "SELECT COUNT(*) AS c FROM projects WHERE user_id=? AND status IN ('queued','running')",
         (user["id"],),
@@ -229,12 +229,12 @@ def extend_project(pid: int, body: ProjectExtendIn, user: CurrentUser = Depends(
     plan_path = run_dir / "plan.json"
     bible_path = run_dir / "story_bible.json"
     if not plan_path.exists() or not bible_path.exists():
-        raise HTTPException(400, "工程档案缺失（book library 不存在），无法续写")
+        raise HTTPException(400, "工程档案缺失（book library 不存在），无法继续更新")
     plan = json.loads(plan_path.read_text(encoding="utf-8"))
     bible = json.loads(bible_path.read_text(encoding="utf-8"))
     done_chapters = len(bible.get("chapters", []))
     if done_chapters == 0:
-        raise HTTPException(400, "工程没有已完成章节，无法续写")
+        raise HTTPException(400, "工程没有已完成章节，无法继续更新")
 
     # 续写策划：基于个人书库生成后续章节任务卡，追加到 plan.json
     from .llm_shim import build_role_router

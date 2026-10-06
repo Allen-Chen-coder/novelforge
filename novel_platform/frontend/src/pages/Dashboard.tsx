@@ -49,7 +49,7 @@ export default function Dashboard() {
   const nav = useNavigate();
   const [projects, setProjects] = useState<Project[] | null>(null); // null = 加载中（骨架屏）
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", idea: "", genre: GENRES[0], target_chapters: 10, target_words: 3000 });
+  const [form, setForm] = useState({ name: "", idea: "", genre: GENRES[0], target_chapters: 5, target_words: 3000 });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   // 额度不足拦截弹窗（最短付费路径：加油包 / 升级套餐）
@@ -122,7 +122,7 @@ export default function Dashboard() {
   };
 
   const statusBadge = (p: Project) => {
-    if (p.status === "done") return <Badge className="bg-emerald-600/90 hover:bg-emerald-600 text-emerald-50">已完成</Badge>;
+    if (p.status === "done") return <Badge className="bg-emerald-600/90 hover:bg-emerald-600 text-emerald-50">已更新 {p.chapters_done} 章</Badge>;
     if (p.status === "failed") return <Badge variant="destructive">失败</Badge>;
     if (p.status === "running")
       return (
@@ -250,9 +250,9 @@ export default function Dashboard() {
             </DialogTrigger>
             <DialogContent className="bg-zinc-900 border-zinc-800 text-zinc-100 sm:max-w-lg rounded-2xl">
               <DialogHeader>
-                <DialogTitle>新建 AI 小说工程</DialogTitle>
+                <DialogTitle>新建连载作品</DialogTitle>
                 <DialogDescription className="text-zinc-500">
-                  输入一句灵感，AI 将自动完成整书策划、逐章写作、审校修订。
+                  输入一句灵感，AI 自动策划开篇并逐章写作。作品长期连载：今天写 1 章也好，之后随时「继续更新」追加，书库保证前后连贯。
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
@@ -275,8 +275,9 @@ export default function Dashboard() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>章节数（消耗额度）</Label>
+                    <Label>首批更新章节数（消耗额度）</Label>
                     <Input type="number" min={1} max={200} value={form.target_chapters} onChange={(e) => setForm({ ...form, target_chapters: Number(e.target.value) })} className="bg-zinc-950/80 border-zinc-800 tnum focus-visible:ring-amber-500/40" />
+                    <p className="text-xs text-zinc-600">连载作品不设总章数上限，之后随时追加更新</p>
                   </div>
                   <div className="space-y-2">
                     <Label>每章字数</Label>
@@ -375,7 +376,7 @@ export default function Dashboard() {
                     />
                   ) : (
                     <p className="text-xs text-zinc-600 tnum">
-                      {p.genre} ｜ {p.chapters_done}/{p.target_chapters} 章 ｜ {p.created_at.slice(0, 10)}
+                      {p.genre} ｜ 已更新 {p.chapters_done} 章{p.status === "done" ? " · 连载中" : ` / 本批 ${p.target_chapters} 章`} ｜ {p.created_at.slice(0, 10)}
                     </p>
                   )}
                   {p.status === "failed" && p.error && (
@@ -385,7 +386,7 @@ export default function Dashboard() {
                   )}
                   {p.status === "done" && (
                     <p className="text-xs text-emerald-500/80 mt-3 flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> 已完本，可导出 Markdown
+                      <CheckCircle2 className="w-3.5 h-3.5" /> 连载中 · 可继续更新或导出
                     </p>
                   )}
                 </SpotlightCard>

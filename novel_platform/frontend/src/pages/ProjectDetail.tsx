@@ -329,7 +329,7 @@ export default function ProjectDetail() {
               <Loader2 className="w-3 h-3 mr-1 animate-spin" />生成中 {detail.chapters_done}/{detail.target_chapters}
             </Badge>
           )}
-          {detail.status === "done" && <Badge className="bg-emerald-600/90 hover:bg-emerald-600 text-emerald-50">已完成</Badge>}
+          {detail.status === "done" && <Badge className="bg-emerald-600/90 hover:bg-emerald-600 text-emerald-50">已更新至第 {detail.chapters_done} 章 · 连载中</Badge>}
           {detail.status === "failed" && (
             <>
               <Badge variant="destructive">失败</Badge>
@@ -400,8 +400,9 @@ export default function ProjectDetail() {
           )}
           {detail.status === "done" && (
             <Button size="sm" onClick={() => setExtendOpen(true)}
+              title="像日更作者一样追加章节：一次 1 章也行，书库保证承接前文"
               className="bg-amber-500 text-zinc-950 hover:bg-amber-400 active:scale-[0.97] transition-all duration-300 ease-fluid font-semibold">
-              <BookPlus className="w-4 h-4 mr-1" />续写
+              <BookPlus className="w-4 h-4 mr-1" />继续更新
             </Button>
           )}
         </div>
@@ -586,19 +587,19 @@ export default function ProjectDetail() {
         </main>
       </div>
 
-      {/* 续写对话框：追加章节，个人书库保证与前文连贯 */}
+      {/* 继续更新对话框：追加章节，个人书库保证与前文连贯 */}
       <Dialog open={extendOpen} onOpenChange={setExtendOpen}>
         <DialogContent className="bg-zinc-900 border-zinc-800 text-zinc-100 sm:max-w-md rounded-2xl">
           <DialogHeader>
-            <DialogTitle>续写《{detail.name}》</DialogTitle>
+            <DialogTitle>继续更新《{detail.name}》</DialogTitle>
             <DialogDescription className="text-zinc-400 leading-relaxed">
-              基于本书的个人书库（全书梗概、人物状态、未回收伏笔）规划续写卷，
-              新章节直接承接第 {detail.chapters_done} 章，不会另起炉灶。
+              作品处于连载中：基于个人书库（全书梗概、人物状态、未回收伏笔）规划后续卷，
+              新章节直接承接第 {detail.chapters_done} 章。今天更新 1 章，还是一口气更 5 章，都可以。
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>续写章节数（消耗额度）</Label>
+              <Label>本次更新章节数（消耗额度）</Label>
               <Input type="number" min={1} max={200} value={extendChapters}
                 onChange={(e) => setExtendChapters(Number(e.target.value))}
                 className="bg-zinc-950/80 border-zinc-800 tnum focus-visible:ring-amber-500/40" />
@@ -617,7 +618,7 @@ export default function ProjectDetail() {
               title={estimateBreakdown(estimateProjectTokens(extendChapters, { targetWords: detail.target_words, genre: detail.genre }))}
               className="bg-amber-500 text-zinc-950 hover:bg-amber-400 active:scale-[0.97] transition-all duration-300 ease-fluid font-semibold">
               {extendBusy ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <BookPlus className="w-4 h-4 mr-1" />}
-              {extendBusy ? "规划中…" : "开始续写"}
+              {extendBusy ? "规划中…" : "开始更新"}
             </Button>
           </DialogFooter>
         </DialogContent>
