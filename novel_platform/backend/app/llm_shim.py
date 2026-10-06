@@ -138,12 +138,23 @@ def test_provider(base_url: str, api_key: str, model: str) -> dict:
 
     client = openai.OpenAI(api_key=api_key, base_url=base_url, timeout=60, max_retries=0)
     t0 = time.time()
+
+    def _ping(param_name: str):
+        kwargs = {
+            "model": model,
+            "messages": [{"role": "user", "content": "ping"}],
+            param_name: 16,
+        }
+        return client.chat.completions.create(**kwargs)
+
     try:
-        client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": "ping"}],
-            max_tokens=16,
-        )
+        try:
+            _ping("max_tokens")
+        except openai.BadRequestError as e1:
+            # 只接受 max_completion_tokens 的模型家族（o1/o3/GPT-5 codex 系）：换参重试
+            if "max_completion_tokens" not in str(e1):
+                raise
+            _ping("max_completion_tokens")
     except openai.BadRequestError as e:
         # 部分服务商/推理模型会把「测试消息太短、被 max_tokens 截断」当作 400 报错。
         # 请求已被受理并路由到模型，说明 Key 有效、地址和模型都对——视为成功。

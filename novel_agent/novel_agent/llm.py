@@ -61,6 +61,9 @@ class LLMClient:
         self._client = None
         # 用量计量回调：后端平台层注入，签名为 fn(model, prompt_tokens, completion_tokens)
         self.usage_callback: Optional[Callable[[str, int, int], None]] = None
+        # 部分模型家族（OpenAI o1/o3、GPT-5 codex 及按此规范实现的服务商）只接受
+        # max_completion_tokens；首次 400 提示后自动切换并记住，后续调用不再试错。
+        self._max_tokens_param = "max_tokens"
         if cfg.model != "mock":
             if not cfg.api_key:
                 raise RuntimeError(
@@ -71,6 +74,21 @@ class LLMClient:
             self._client = OpenAI(
                 api_key=cfg.api_key, base_url=cfg.base_url, timeout=cfg.request_timeout
             )
+
+    def _create(self, **kwargs):
+        """带参数兼容的 chat.completions.create 调用。"""
+        if self._max_tokens_param == "max_completion_tokens":
+            kwargs["max_completion_tokens"] = kwargs.pop("max_tokens", None)
+            return self._client.chat.completions.create(**kwargs)
+        try:
+            return self._client.chat.completions.create(**kwargs)
+        except Exception as e:
+            if "max_completion_tokens" not in str(e):
+                raise
+        # 服务端要求换参数名：校验阶段失败通常不计费，换名重发一次并记住
+        self._max_tokens_param = "max_completion_tokens"
+        kwargs["max_completion_tokens"] = kwargs.pop("max_tokens", None)
+        return self._client.chat.completions.create(**kwargs)
 
     # ------------------------------------------------------------------ #
     def chat(
@@ -99,7 +117,7 @@ class LLMClient:
                 }
                 if json_mode:
                     kwargs["response_format"] = {"type": "json_object"}
-                resp = self._client.chat.completions.create(**kwargs)
+                resp = self._create(**kwargs)
                 self._report_usage(resp)
                 return resp.choices[0].message.content or ""
             except Exception as e:  # 网络抖动/限流统一退避重试
@@ -150,7 +168,7 @@ class LLMClient:
         last_err: Optional[Exception] = None
         for attempt in range(retries if retries is not None else self.cfg.max_retries):
             try:
-                resp = self._client.chat.completions.create(
+                resp = self._create(
                     model=self.cfg.model,
                     messages=[
                         {"role": "system", "content": system},
